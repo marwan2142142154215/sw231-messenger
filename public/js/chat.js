@@ -801,19 +801,6 @@ function escapeHtml(text) {
 
 // Loading animation
 function initLoadingAnimation() {
-  const field = document.getElementById('stars-field');
-  if (!field) return;
-  for (let i = 0; i < 80; i++) {
-    const star = document.createElement('div');
-    star.className = 'star';
-    star.style.left = Math.random() * 100 + '%';
-    star.style.top = Math.random() * 100 + '%';
-    star.style.animationDelay = (Math.random() * 2) + 's';
-    star.style.width = (Math.random() * 3 + 1) + 'px';
-    star.style.height = star.style.width;
-    field.appendChild(star);
-  }
-
   setTimeout(() => {
     const loadScreen = document.getElementById('loading-screen');
     if (loadScreen) {
@@ -821,9 +808,9 @@ function initLoadingAnimation() {
       setTimeout(() => {
         loadScreen.style.display = 'none';
         document.getElementById('auth-screen').style.display = 'flex';
-      }, 800);
+      }, 500);
     }
-  }, 7000);
+  }, 10000);
 }
 
 initLoadingAnimation();
