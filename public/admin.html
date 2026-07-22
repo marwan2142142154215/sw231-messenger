@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SW231 - Admin Panel</title>
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+  <div id="login-screen" class="login-screen">
+    <div class="login-box">
+      <div class="login-header">
+        <div class="shield-icon">&#128737;</div>
+        <h1>SW231</h1>
+        <p>Master Admin Portal</p>
+      </div>
+      <form id="login-form">
+        <div class="input-group">
+          <label>Username</label>
+          <input type="text" id="username" autocomplete="off" required>
+        </div>
+        <div class="input-group">
+          <label>Password</label>
+          <input type="password" id="password" required>
+        </div>
+        <button type="submit" class="btn-primary">Login</button>
+        <div id="login-error" class="error-msg"></div>
+      </form>
+    </div>
+  </div>
+
+  <div id="admin-panel" class="admin-panel" style="display:none;">
+    <nav class="sidebar">
+      <div class="sidebar-header">
+        <div class="shield-icon">&#128737;</div>
+        <h2>SW231</h2>
+      </div>
+      <ul class="nav-links">
+        <li class="active" data-tab="dashboard">&#128200; Dashboard</li>
+        <li data-tab="users">&#128101; Users</li>
+        <li data-tab="pending">&#9200; Pending</li>
+        <li data-tab="security">&#128274; Security</li>
+        <li data-tab="firewall">&#128737; Firewall</li>
+        <li data-tab="logs">&#128196; Logs</li>
+        <li data-tab="passwords">&#128272; Passwords</li>
+      </ul>
+      <div class="sidebar-footer">
+        <button id="logout-btn" class="btn-logout">Logout</button>
+      </div>
+    </nav>
+
+    <main class="content">
+      <div id="tab-dashboard" class="tab-content active">
+        <h2>Dashboard</h2>
+        <div class="stats-grid" id="stats-grid"></div>
+        <div class="chart-area">
+          <h3>System Activity</h3>
+          <div id="system-info" class="system-info"></div>
+        </div>
+      </div>
+
+      <div id="tab-users" class="tab-content">
+        <h2>All Users</h2>
+        <div class="search-bar">
+          <input type="text" id="user-search" placeholder="Search users...">
+        </div>
+        <div id="users-table" class="table-container"></div>
+      </div>
+
+      <div id="tab-pending" class="tab-content">
+        <h2>Pending Approvals</h2>
+        <div id="pending-table" class="table-container"></div>
+      </div>
+
+      <div id="tab-security" class="tab-content">
+        <h2>Security Center</h2>
+        <div class="security-actions">
+          <button id="force-parcels" class="btn-action">Force Parcel Rotation</button>
+          <button id="force-rehash" class="btn-action">Force Password Rehash</button>
+        </div>
+        <div id="security-info" class="security-info"></div>
+      </div>
+
+      <div id="tab-firewall" class="tab-content">
+        <h2>Firewall Status</h2>
+        <div id="firewall-info" class="firewall-info"></div>
+      </div>
+
+      <div id="tab-logs" class="tab-content">
+        <h2>Admin Logs</h2>
+        <div id="logs-table" class="table-container"></div>
+      </div>
+
+      <div id="tab-passwords" class="tab-content">
+        <h2>Password Inspector</h2>
+        <div class="search-bar">
+          <input type="text" id="password-search" placeholder="Enter user ID to inspect...">
+          <button id="search-password" class="btn-action">Search</button>
+        </div>
+        <div id="password-info" class="password-info"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/js/admin.js"></script>
+</body>
+</html>
