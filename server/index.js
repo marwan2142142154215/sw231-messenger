@@ -18,6 +18,7 @@ async function startServer() {
   const userRoutes = require('./routes/userRoutes');
   const adminRoutes = require('./routes/adminRoutes');
   const mediaRoutes = require('./routes/mediaRoutes');
+  const conversationRoutes = require('./routes/conversationRoutes');
 
   const app = express();
   const server = http.createServer(app);
@@ -43,6 +44,7 @@ async function startServer() {
   app.use('/api/users', userRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/media', mediaRoutes);
+  app.use('/api/conversations', conversationRoutes);
 
   app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));

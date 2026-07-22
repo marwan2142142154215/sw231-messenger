@@ -7,11 +7,32 @@
   <link rel="stylesheet" href="/css/chat.css">
 </head>
 <body>
-  <div id="auth-screen" class="auth-screen">
+  <div id="loading-screen" class="loading-screen">
+    <div class="loading-cosmos">
+      <div class="blackhole">
+        <div class="event-horizon"></div>
+        <div class="accretion-disk"></div>
+        <div class="accretion-disk disk-2"></div>
+        <div class="jet jet-top"></div>
+        <div class="jet jet-bottom"></div>
+      </div>
+      <div class="stars-field" id="stars-field"></div>
+      <div class="galaxy-form" id="galaxy-form">
+        <div class="galaxy-arm arm-1"></div>
+        <div class="galaxy-arm arm-2"></div>
+        <div class="galaxy-arm arm-3"></div>
+        <div class="galaxy-core"></div>
+      </div>
+      <div class="loading-text">SW231</div>
+      <div class="loading-sub">Entering the multiverse...</div>
+    </div>
+  </div>
+
+  <div id="auth-screen" class="auth-screen" style="display:none;">
     <div class="auth-container">
       <div class="auth-tabs">
-        <button class="auth-tab active" data-tab="login">Login</button>
-        <button class="auth-tab" data-tab="register">Register</button>
+        <button type="button" class="auth-tab active" data-tab="login">Login</button>
+        <button type="button" class="auth-tab" data-tab="register">Register</button>
       </div>
       <form id="auth-form" class="auth-form">
         <div id="register-fields" style="display:none;">

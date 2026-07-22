@@ -199,7 +199,7 @@ function appendMessage(msg) {
   }
 
   let mediaHtml = '';
-  const url = msg.mediaUrl || mediaUrl;
+  const url = msg.mediaUrl;
   if (msg.type === 'image' && url) {
     mediaHtml = `<div class="msg-media"><img src="${url}" alt="Photo" loading="lazy" onclick="openLightbox('${url}', 'image')"></div>`;
   } else if (msg.type === 'video' && url) {
@@ -799,7 +799,42 @@ function escapeHtml(text) {
   const d = document.createElement('div'); d.textContent = text; return d.innerHTML;
 }
 
+// Loading animation
+function initLoadingAnimation() {
+  const field = document.getElementById('stars-field');
+  if (!field) return;
+  for (let i = 0; i < 80; i++) {
+    const star = document.createElement('div');
+    star.className = 'star';
+    star.style.left = Math.random() * 100 + '%';
+    star.style.top = Math.random() * 100 + '%';
+    star.style.animationDelay = (Math.random() * 2) + 's';
+    star.style.width = (Math.random() * 3 + 1) + 'px';
+    star.style.height = star.style.width;
+    field.appendChild(star);
+  }
+
+  setTimeout(() => {
+    const loadScreen = document.getElementById('loading-screen');
+    if (loadScreen) {
+      loadScreen.classList.add('fade-out');
+      setTimeout(() => {
+        loadScreen.style.display = 'none';
+        document.getElementById('auth-screen').style.display = 'flex';
+      }, 800);
+    }
+  }, 7000);
+}
+
+initLoadingAnimation();
+
 // Init
 if (token) {
-  api('GET', '/api/auth/me').then(data => { currentUser = data.user; showApp(); }).catch(() => localStorage.removeItem('chat_token'));
+  document.getElementById('loading-screen').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'none';
+  api('GET', '/api/auth/me').then(data => { currentUser = data.user; showApp(); }).catch(() => {
+    localStorage.removeItem('chat_token');
+    document.getElementById('loading-screen').style.display = 'none';
+    document.getElementById('auth-screen').style.display = 'flex';
+  });
 }

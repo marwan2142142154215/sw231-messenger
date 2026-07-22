@@ -202,4 +202,39 @@ router.get('/firewall', masterGuard, (req, res) => {
   }
 });
 
+router.post('/users/create', masterGuard, async (req, res) => {
+  try {
+    const { username, password, displayName } = req.body;
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username dan password wajib diisi.' });
+    }
+    if (username.length < 3 || password.length < 4) {
+      return res.status(400).json({ error: 'Username minimal 3 karakter, password minimal 4 karakter.' });
+    }
+
+    const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+    if (existing) {
+      return res.status(400).json({ error: 'Username sudah digunakan.' });
+    }
+
+    const hash = hashPassword(password);
+    const userId = uuidv4();
+
+    db.prepare(`
+      INSERT INTO users (id, username, display_name, password_hash, role, is_approved, created_at)
+      VALUES (?, ?, ?, ?, 'user', 1, datetime('now'))
+    `).run(userId, username, displayName || username, hash);
+
+    db.prepare(`
+      INSERT INTO admin_logs (id, action, target_user, admin_id, details)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(uuidv4(), 'CREATE_USER', userId, req.user.id, `Created user ${username} (auto-approved)`);
+
+    res.json({ message: `User ${username} berhasil dibuat dan langsung disetujui.`, userId });
+  } catch (err) {
+    console.error('[ADMIN] Create user error:', err);
+    res.status(500).json({ error: 'Gagal membuat user.' });
+  }
+});
+
 module.exports = router;

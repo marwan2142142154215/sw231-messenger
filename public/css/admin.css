@@ -338,3 +338,49 @@ tr:hover td { background: var(--bg-hover); }
 .log-entry:last-child { border-bottom: none; }
 .log-time { color: var(--text-secondary); }
 .log-action { color: var(--accent); font-weight: 600; }
+
+.success-msg {
+  color: var(--success);
+  text-align: center;
+  margin-top: 12px;
+  font-size: 14px;
+  min-height: 20px;
+}
+
+.create-user-form {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.create-user-form h3 {
+  font-size: 16px;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+}
+
+.form-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.form-row input {
+  flex: 1;
+  min-width: 140px;
+  padding: 10px 14px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-row input:focus { border-color: var(--accent); }
+
+.form-row .btn-action { margin: 0; white-space: nowrap; }

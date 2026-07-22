@@ -61,6 +61,16 @@
 
       <div id="tab-users" class="tab-content">
         <h2>All Users</h2>
+        <div class="create-user-form">
+          <h3>Create New User</h3>
+          <div class="form-row">
+            <input type="text" id="new-username" placeholder="Username" autocomplete="off">
+            <input type="password" id="new-password" placeholder="Password">
+            <input type="text" id="new-displayname" placeholder="Display Name (optional)">
+            <button id="create-user-btn" class="btn-action btn-success">Create User</button>
+          </div>
+          <div id="create-user-msg" class="error-msg"></div>
+        </div>
         <div class="search-bar">
           <input type="text" id="user-search" placeholder="Search users...">
         </div>

@@ -298,6 +298,49 @@ async function banUser(userId) {
   } catch (err) { alert(err.message); }
 }
 
+document.getElementById('create-user-btn').addEventListener('click', async () => {
+  const username = document.getElementById('new-username').value.trim();
+  const password = document.getElementById('new-password').value;
+  const displayName = document.getElementById('new-displayname').value.trim();
+  const msgEl = document.getElementById('create-user-msg');
+  msgEl.textContent = '';
+  msgEl.className = 'error-msg';
+
+  if (!username || !password) {
+    msgEl.textContent = 'Username dan password wajib diisi.';
+    return;
+  }
+  if (username.length < 3) {
+    msgEl.textContent = 'Username minimal 3 karakter.';
+    return;
+  }
+  if (password.length < 4) {
+    msgEl.textContent = 'Password minimal 4 karakter.';
+    return;
+  }
+
+  try {
+    const result = await api('POST', '/api/admin/users/create', { username, password, displayName: displayName || username });
+    msgEl.textContent = result.message;
+    msgEl.className = 'success-msg';
+    document.getElementById('new-username').value = '';
+    document.getElementById('new-password').value = '';
+    document.getElementById('new-displayname').value = '';
+    loadUsers();
+    loadDashboard();
+  } catch (err) {
+    msgEl.textContent = err.message;
+  }
+});
+
+document.getElementById('user-search').addEventListener('input', (e) => {
+  const q = e.target.value.toLowerCase();
+  const rows = document.querySelectorAll('#users-table tbody tr');
+  rows.forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+  });
+});
+
 async function viewPassword(userId) {
   document.querySelectorAll('.nav-links li').forEach(l => l.classList.remove('active'));
   document.querySelector('[data-tab="passwords"]').classList.add('active');
