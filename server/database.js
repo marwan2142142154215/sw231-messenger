@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 
 const DB_PATH = path.join(__dirname, '..', 'data', 'messenger.db');
+const BACKUP_PATH = path.join(__dirname, '..', 'data', 'messenger.backup.db');
 const dataDir = path.join(__dirname, '..', 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
@@ -15,8 +16,29 @@ function saveDb() {
   if (!_db) return;
   try {
     const data = _db.export();
-    fs.writeFileSync(DB_PATH, Buffer.from(data));
+    const buf = Buffer.from(data);
+    fs.writeFileSync(DB_PATH, buf);
+    fs.writeFileSync(BACKUP_PATH, buf);
   } catch(e) { console.error('[DB] Save error:', e.message); }
+}
+
+function exportDbBase64() {
+  if (!_db) return null;
+  const data = _db.export();
+  return Buffer.from(data).toString('base64');
+}
+
+function importDbBase64(b64) {
+  if (!_db || !_sql) return false;
+  try {
+    const buf = Buffer.from(b64, 'base64');
+    _db = new _sql.Database(buf);
+    saveDb();
+    return true;
+  } catch(e) {
+    console.error('[DB] Import error:', e.message);
+    return false;
+  }
 }
 
 const db = {
@@ -68,8 +90,15 @@ async function initDatabase() {
   if (fs.existsSync(DB_PATH)) {
     const fileBuffer = fs.readFileSync(DB_PATH);
     _db = new _sql.Database(fileBuffer);
+    console.log('[DB] Loaded from main database file');
+  } else if (fs.existsSync(BACKUP_PATH)) {
+    const fileBuffer = fs.readFileSync(BACKUP_PATH);
+    _db = new _sql.Database(fileBuffer);
+    console.log('[DB] Restored from backup file');
+    saveDb();
   } else {
     _db = new _sql.Database();
+    console.log('[DB] Created new empty database');
   }
 
   const tables = [
@@ -137,8 +166,8 @@ async function initDatabase() {
   }
 
   saveDb();
-  setInterval(saveDb, 5000);
+  setInterval(saveDb, 30000);
   console.log('[DB] Database initialized');
 }
 
-module.exports = { db, initDatabase };
+module.exports = { db, initDatabase, exportDbBase64, importDbBase64 };

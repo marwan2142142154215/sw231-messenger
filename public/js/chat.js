@@ -372,6 +372,18 @@ document.getElementById('message-input').addEventListener('keydown', function(e)
     typingTimeout = setTimeout(function() { socket.emit('typing:stop', currentConversation.id); }, 2000);
   }
 });
+
+// Auto-resize textarea
+function autoResizeTextarea() {
+  var el = document.getElementById('message-input');
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+document.getElementById('message-input').addEventListener('input', autoResizeTextarea);
+document.getElementById('message-input').addEventListener('paste', function() {
+  setTimeout(autoResizeTextarea, 0);
+});
+
 document.getElementById('send-btn').addEventListener('click', sendMessage);
 
 function sendMessage() {
@@ -415,6 +427,7 @@ function startEdit(msgId, content) {
   document.getElementById('edit-preview').style.display = 'flex';
   document.getElementById('message-input').value = content.replace(/\\n/g, '\n');
   document.getElementById('message-input').focus();
+  setTimeout(autoResizeTextarea, 0);
 }
 document.getElementById('edit-close').addEventListener('click', function() {
   editingMessage = null;
@@ -840,6 +853,79 @@ function playNotifSound() {
     osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.15);
   } catch(e) {}
 }
+
+// Profile Edit Modal
+document.getElementById('my-profile-btn').addEventListener('click', function() {
+  if (!currentUser) return;
+  var modal = document.getElementById('profile-modal');
+  document.getElementById('profile-display-name').value = currentUser.displayName || '';
+  var preview = document.getElementById('profile-avatar-preview');
+  preview.textContent = (currentUser.displayName || '?').charAt(0).toUpperCase();
+  document.getElementById('profile-msg').textContent = '';
+  modal.style.display = 'flex';
+});
+
+document.getElementById('close-profile-modal').addEventListener('click', function() {
+  document.getElementById('profile-modal').style.display = 'none';
+});
+document.getElementById('profile-cancel-btn').addEventListener('click', function() {
+  document.getElementById('profile-modal').style.display = 'none';
+});
+
+document.getElementById('profile-modal').addEventListener('click', function(e) {
+  if (e.target === document.getElementById('profile-modal')) {
+    document.getElementById('profile-modal').style.display = 'none';
+  }
+});
+
+document.getElementById('profile-avatar-btn').addEventListener('click', function() {
+  document.getElementById('profile-avatar-input').click();
+});
+
+document.getElementById('profile-avatar-input').addEventListener('change', function(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  uploadFile(file).then(function(uploaded) {
+    api('PUT', '/api/users/profile', { avatarUrl: uploaded.url }).then(function() {
+      currentUser.avatarUrl = uploaded.url;
+      document.getElementById('profile-msg').style.color = 'var(--success)';
+      document.getElementById('profile-msg').textContent = 'Avatar updated!';
+      var initial = (currentUser.displayName || '?').charAt(0).toUpperCase();
+      document.getElementById('profile-avatar-preview').textContent = initial;
+      document.getElementById('my-avatar').textContent = initial;
+    }).catch(function(err) {
+      document.getElementById('profile-msg').style.color = 'var(--danger)';
+      document.getElementById('profile-msg').textContent = err.message;
+    });
+  }).catch(function(err) {
+    document.getElementById('profile-msg').style.color = 'var(--danger)';
+    document.getElementById('profile-msg').textContent = 'Upload failed: ' + err.message;
+  });
+  e.target.value = '';
+});
+
+document.getElementById('profile-save-btn').addEventListener('click', function() {
+  var newName = document.getElementById('profile-display-name').value.trim();
+  if (!newName) {
+    document.getElementById('profile-msg').style.color = 'var(--danger)';
+    document.getElementById('profile-msg').textContent = 'Display name cannot be empty.';
+    return;
+  }
+  api('PUT', '/api/users/profile', { displayName: newName }).then(function() {
+    currentUser.displayName = newName;
+    document.getElementById('my-name').textContent = newName;
+    document.getElementById('profile-avatar-preview').textContent = newName.charAt(0).toUpperCase();
+    document.getElementById('my-avatar').textContent = newName.charAt(0).toUpperCase();
+    document.getElementById('profile-msg').style.color = 'var(--success)';
+    document.getElementById('profile-msg').textContent = 'Profile updated!';
+    setTimeout(function() {
+      document.getElementById('profile-modal').style.display = 'none';
+    }, 1000);
+  }).catch(function(err) {
+    document.getElementById('profile-msg').style.color = 'var(--danger)';
+    document.getElementById('profile-msg').textContent = err.message;
+  });
+});
 
 // Helpers
 function formatTime(dateStr) {

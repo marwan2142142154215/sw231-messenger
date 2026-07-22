@@ -110,7 +110,17 @@ router.get('/me', authGuard, (req, res) => {
     FROM users WHERE id = ?
   `).get(req.user.id);
 
-  res.json({ user });
+  res.json({
+    user: {
+      id: user.id,
+      username: user.username,
+      displayName: user.display_name,
+      avatarUrl: user.avatar_url,
+      role: user.role,
+      status: user.status,
+      createdAt: user.created_at
+    }
+  });
 });
 
 module.exports = router;

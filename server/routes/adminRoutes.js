@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { db } = require('../database');
+const { exportDbBase64, importDbBase64 } = require('../database');
 const { masterGuard, destroyAllUserSessions } = require('../middleware/guard');
 const { hashPassword } = require('../encryption');
 const { getFirewallStats } = require('../middleware/firewall');
@@ -234,6 +235,34 @@ router.post('/users/create', masterGuard, async (req, res) => {
   } catch (err) {
     console.error('[ADMIN] Create user error:', err);
     res.status(500).json({ error: 'Gagal membuat user.' });
+  }
+});
+
+router.get('/db/export', masterGuard, (req, res) => {
+  try {
+    const b64 = exportDbBase64();
+    if (!b64) return res.status(500).json({ error: 'Database not initialized.' });
+    db.prepare(`INSERT INTO admin_logs (id, action, admin_id, details) VALUES (?, ?, ?, ?)`)
+      .run(uuidv4(), 'DB_EXPORT', req.user.id, 'Database exported');
+    res.json({ data: b64, size: b64.length });
+  } catch (err) {
+    console.error('[ADMIN] DB export error:', err);
+    res.status(500).json({ error: 'Gagal export database.' });
+  }
+});
+
+router.post('/db/import', masterGuard, (req, res) => {
+  try {
+    const { data } = req.body;
+    if (!data) return res.status(400).json({ error: 'No data provided.' });
+    const ok = importDbBase64(data);
+    if (!ok) return res.status(400).json({ error: 'Invalid database data.' });
+    db.prepare(`INSERT INTO admin_logs (id, action, admin_id, details) VALUES (?, ?, ?, ?)`)
+      .run(uuidv4(), 'DB_IMPORT', req.user.id, 'Database imported');
+    res.json({ message: 'Database berhasil di-import.' });
+  } catch (err) {
+    console.error('[ADMIN] DB import error:', err);
+    res.status(500).json({ error: 'Gagal import database.' });
   }
 });
 

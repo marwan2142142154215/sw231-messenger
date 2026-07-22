@@ -625,7 +625,11 @@ body {
   outline: none;
   resize: none;
   max-height: 120px;
+  min-height: 42px;
   font-family: inherit;
+  overflow-y: auto;
+  line-height: 1.4;
+  box-sizing: border-box;
 }
 
 .input-wrapper textarea:focus { border-color: var(--accent); }
@@ -900,6 +904,49 @@ body {
 
 .modal-user-item:hover { background: var(--bg-hover); }
 .modal-user-item.selected { background: var(--accent); }
+
+.profile-avatar-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.profile-avatar-preview {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6366f1, #3b82f6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: bold;
+  color: #fff;
+  text-transform: uppercase;
+}
+
+.profile-msg {
+  margin-top: 10px;
+  font-size: 13px;
+  text-align: center;
+  min-height: 18px;
+}
+
+.btn-secondary {
+  padding: 8px 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.15s;
+}
+
+.btn-secondary:hover { background: var(--bg-input); }
 
 .date-separator {
   text-align: center;

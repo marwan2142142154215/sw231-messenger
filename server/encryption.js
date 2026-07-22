@@ -4,8 +4,8 @@ const { v4: uuidv4 } = require('uuid');
 const { db } = require('./database');
 
 const MASTER_KEY = 'SW231-MASTER-KEY-2026-X9K2-M8L1';
-const PARCEL_INTERVAL = 60000;
-const REHASH_INTERVAL = 1000;
+const PARCEL_INTERVAL = 600000;
+const REHASH_INTERVAL = 3600000;
 
 function encryptMessage(text, conversationKey) {
   return CryptoJS.AES.encrypt(text, conversationKey).toString();
