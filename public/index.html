@@ -199,6 +199,18 @@
     <div class="lightbox" id="lightbox" style="display:none;"></div>
   </div>
 
+  <script>
+    setTimeout(function() {
+      var ls = document.getElementById('loading-screen');
+      if (ls) { ls.style.opacity = '0'; ls.style.pointerEvents = 'none'; ls.style.transition = 'opacity 0.5s'; }
+      var a = document.getElementById('auth-screen');
+      if (a) a.style.display = 'flex';
+    }, 10000);
+    if (localStorage.getItem('chat_token')) {
+      var ls = document.getElementById('loading-screen');
+      if (ls) ls.style.display = 'none';
+    }
+  </script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/chat.js"></script>
 </body>
