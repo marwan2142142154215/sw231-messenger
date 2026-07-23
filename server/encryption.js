@@ -36,8 +36,8 @@ function generateParcel() {
   return { parcelId, parcelHash, timestamp };
 }
 
-function createParcels() {
-  const users = db.prepare('SELECT id FROM users').all();
+async function createParcels() {
+  const users = await db.prepare('SELECT id FROM users').all();
   const parcels = [];
 
   for (const user of users) {
@@ -47,33 +47,27 @@ function createParcels() {
       MASTER_KEY + parcel.parcelId
     ).toString();
 
-    db.prepare(`
-      INSERT OR REPLACE INTO encryption_keys (id, user_id, key_data, parcel_id, created_at, expires_at)
-      VALUES (?, ?, ?, ?, datetime('now'), datetime('now', '+2 minutes'))
+    await db.prepare(`
+      INSERT INTO encryption_keys (id, user_id, key_data, parcel_id, created_at, expires_at)
+      VALUES ($1, $2, $3, $4, NOW(), NOW() + INTERVAL '2 minutes')
+      ON CONFLICT (id) DO UPDATE SET key_data = $3, parcel_id = $4, expires_at = NOW() + INTERVAL '2 minutes'
     `).run(uuidv4(), user.id, securityLayer, parcel.parcelId);
     parcels.push(parcel);
   }
 
-  const expiredParcels = db.prepare(`
-    DELETE FROM encryption_keys WHERE expires_at < datetime('now')
+  const expiredParcels = await db.prepare(`
+    DELETE FROM encryption_keys WHERE expires_at < NOW()
   `).run();
 
   return { parcelCount: parcels.length, cleanedExpired: expiredParcels.changes };
 }
 
-function rehashPasswords() {
-  const users = db.prepare('SELECT id FROM users').all();
+async function rehashPasswords() {
+  const users = await db.prepare('SELECT id FROM users').all();
   let rehashed = 0;
 
   for (const user of users) {
-    const dynamicSalt = CryptoJS.lib.WordArray.random(16).toString();
-    const timestamp = Date.now();
-    const obfuscated = CryptoJS.AES.encrypt(
-      `${user.id}:${dynamicSalt}:${timestamp}`,
-      MASTER_KEY
-    ).toString();
-
-    db.prepare('UPDATE users SET status = status WHERE id = ?').run(user.id);
+    await db.prepare('UPDATE users SET status = status WHERE id = $1').run(user.id);
     rehashed++;
   }
 
@@ -84,18 +78,18 @@ let parcelInterval = null;
 let rehashInterval = null;
 
 function startSecurityCycles() {
-  parcelInterval = setInterval(() => {
+  parcelInterval = setInterval(async () => {
     try {
-      const result = createParcels();
+      const result = await createParcels();
       console.log(`[SECURITY] Parcels created: ${result.parcelCount}, Expired cleaned: ${result.cleanedExpired}`);
     } catch (err) {
       console.error('[SECURITY] Parcel error:', err.message);
     }
   }, PARCEL_INTERVAL);
 
-  rehashInterval = setInterval(() => {
+  rehashInterval = setInterval(async () => {
     try {
-      const result = rehashPasswords();
+      const result = await rehashPasswords();
       console.log(`[SECURITY] Security layer rotated: ${result.rehashed}`);
     } catch (err) {
       console.error('[SECURITY] Rehash error:', err.message);
@@ -103,7 +97,7 @@ function startSecurityCycles() {
   }, REHASH_INTERVAL);
 
   console.log('[SECURITY] Security cycles started');
-  createParcels();
+  createParcels().catch(err => console.error('[SECURITY] Initial parcel error:', err.message));
 }
 
 function stopSecurityCycles() {
@@ -117,10 +111,8 @@ module.exports = {
   generateConversationKey,
   hashPassword,
   verifyPassword,
-  generateParcel,
-  createParcels,
-  rehashPasswords,
   startSecurityCycles,
   stopSecurityCycles,
-  MASTER_KEY
+  createParcels,
+  rehashPasswords
 };

@@ -6,7 +6,7 @@ const { hashPassword, verifyPassword } = require('../encryption');
 const { authGuard, createSession, destroySession } = require('../middleware/guard');
 const { authLimiter } = require('../middleware/firewall');
 
-router.post('/register', authLimiter, (req, res) => {
+router.post('/register', authLimiter, async (req, res) => {
   try {
     const { username, password, displayName } = req.body;
 
@@ -26,7 +26,7 @@ router.post('/register', authLimiter, (req, res) => {
       return res.status(400).json({ error: 'Username hanya boleh huruf, angka, dan underscore.' });
     }
 
-    const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+    const existing = await db.prepare('SELECT id FROM users WHERE username = $1').get(username);
     if (existing) {
       return res.status(409).json({ error: 'Username sudah digunakan.' });
     }
@@ -34,9 +34,9 @@ router.post('/register', authLimiter, (req, res) => {
     const userId = uuidv4();
     const passwordHash = hashPassword(password);
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO users (id, username, password_hash, display_name, is_approved)
-      VALUES (?, ?, ?, ?, 0)
+      VALUES ($1, $2, $3, $4, 0)
     `).run(userId, username, passwordHash, displayName);
 
     res.status(201).json({
@@ -49,7 +49,7 @@ router.post('/register', authLimiter, (req, res) => {
   }
 });
 
-router.post('/login', authLimiter, (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
   try {
     const { username, password } = req.body;
 
@@ -57,7 +57,7 @@ router.post('/login', authLimiter, (req, res) => {
       return res.status(400).json({ error: 'Username dan password harus diisi.' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+    const user = await db.prepare('SELECT * FROM users WHERE username = $1').get(username);
 
     if (!user) {
       return res.status(401).json({ error: 'Username atau password salah.' });
@@ -71,9 +71,9 @@ router.post('/login', authLimiter, (req, res) => {
       return res.status(403).json({ error: 'Akun belum disetujui oleh admin.' });
     }
 
-    const session = createSession(user.id, req.ip, req.get('User-Agent'));
+    const session = await createSession(user.id, req.ip, req.get('User-Agent'));
 
-    db.prepare('UPDATE users SET status = ?, last_seen = datetime(\'now\') WHERE id = ?')
+    await db.prepare("UPDATE users SET status = $1, last_seen = NOW() WHERE id = $2")
       .run('online', user.id);
 
     res.json({
@@ -93,10 +93,10 @@ router.post('/login', authLimiter, (req, res) => {
   }
 });
 
-router.post('/logout', authGuard, (req, res) => {
+router.post('/logout', authGuard, async (req, res) => {
   try {
-    destroySession(req.token);
-    db.prepare('UPDATE users SET status = ? WHERE id = ?').run('offline', req.user.id);
+    await destroySession(req.token);
+    await db.prepare('UPDATE users SET status = $1 WHERE id = $2').run('offline', req.user.id);
     res.json({ message: 'Logout berhasil.' });
   } catch (err) {
     console.error('[AUTH] Logout error:', err);
@@ -104,10 +104,10 @@ router.post('/logout', authGuard, (req, res) => {
   }
 });
 
-router.get('/me', authGuard, (req, res) => {
-  const user = db.prepare(`
+router.get('/me', authGuard, async (req, res) => {
+  const user = await db.prepare(`
     SELECT id, username, display_name, avatar_url, role, status, created_at
-    FROM users WHERE id = ?
+    FROM users WHERE id = $1
   `).get(req.user.id);
 
   res.json({

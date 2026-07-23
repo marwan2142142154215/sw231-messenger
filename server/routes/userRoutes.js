@@ -3,9 +3,9 @@ const router = express.Router();
 const { db } = require('../database');
 const { authGuard } = require('../middleware/guard');
 
-router.get('/', authGuard, (req, res) => {
+router.get('/', authGuard, async (req, res) => {
   try {
-    const users = db.prepare(`
+    const users = await db.prepare(`
       SELECT id, username, display_name, avatar_url, role, status, last_seen, created_at, is_approved
       FROM users
       ORDER BY username ASC
@@ -18,15 +18,15 @@ router.get('/', authGuard, (req, res) => {
   }
 });
 
-router.get('/search', authGuard, (req, res) => {
+router.get('/search', authGuard, async (req, res) => {
   try {
     const { q } = req.query;
     if (!q) return res.json({ users: [] });
 
-    const users = db.prepare(`
+    const users = await db.prepare(`
       SELECT id, username, display_name, avatar_url, status
       FROM users
-      WHERE (username LIKE ? OR display_name LIKE ?) AND is_approved = 1 AND id != ?
+      WHERE (username LIKE $1 OR display_name LIKE $2) AND is_approved = 1 AND id != $3
       LIMIT 20
     `).all(`%${q}%`, `%${q}%`, req.user.id);
 
@@ -37,17 +37,17 @@ router.get('/search', authGuard, (req, res) => {
   }
 });
 
-router.put('/profile', authGuard, (req, res) => {
+router.put('/profile', authGuard, async (req, res) => {
   try {
     const { displayName, avatarUrl } = req.body;
 
     if (displayName) {
-      db.prepare('UPDATE users SET display_name = ? WHERE id = ?')
+      await db.prepare('UPDATE users SET display_name = $1 WHERE id = $2')
         .run(displayName, req.user.id);
     }
 
     if (avatarUrl) {
-      db.prepare('UPDATE users SET avatar_url = ? WHERE id = ?')
+      await db.prepare('UPDATE users SET avatar_url = $1 WHERE id = $2')
         .run(avatarUrl, req.user.id);
     }
 

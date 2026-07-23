@@ -5,10 +5,10 @@ const { db } = require('../database');
 const { authGuard } = require('../middleware/guard');
 const { encryptMessage, decryptMessage, generateConversationKey } = require('../encryption');
 
-router.get('/:conversationId', authGuard, (req, res) => {
+router.get('/:conversationId', authGuard, async (req, res) => {
   try {
-    const isMember = db.prepare(`
-      SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?
+    const isMember = await db.prepare(`
+      SELECT 1 FROM conversation_members WHERE conversation_id = $1 AND user_id = $2
     `).get(req.params.conversationId, req.user.id);
 
     if (!isMember) {
@@ -19,24 +19,24 @@ router.get('/:conversationId', authGuard, (req, res) => {
     const limit = parseInt(req.query.limit) || 50;
     const offset = (page - 1) * limit;
 
-    const messages = db.prepare(`
+    const messages = await db.prepare(`
       SELECT m.*, u.username, u.display_name, u.avatar_url,
-        (SELECT json_group_array(DISTINCT json_object('emoji', r.emoji, 'userId', r.user_id, 'username', ru.username))
+        (SELECT COALESCE(json_agg(DISTINCT json_build_object('emoji', r.emoji, 'userId', r.user_id, 'username', ru.username)), '[]'::json)
          FROM reactions r JOIN users ru ON r.user_id = ru.id WHERE r.message_id = m.id) as reactions_json,
-        (SELECT json_object('id', rm.id, 'content', rm.content, 'sender_id', rm.sender_id, 'username', rmu.username)
+        (SELECT json_build_object('id', rm.id, 'content', rm.content, 'sender_id', rm.sender_id, 'username', rmu.username)
          FROM messages rm JOIN users rmu ON rm.sender_id = rmu.id WHERE m.reply_to = rm.id) as reply_to_data
       FROM messages m
       JOIN users u ON m.sender_id = u.id
-      WHERE m.conversation_id = ? AND m.is_deleted = 0
+      WHERE m.conversation_id = $1 AND m.is_deleted = 0
       ORDER BY m.created_at DESC
-      LIMIT ? OFFSET ?
+      LIMIT $2 OFFSET $3
     `).all(req.params.conversationId, limit, offset);
 
     const parsed = messages.map(msg => {
       let reactions = [];
-      try { reactions = JSON.parse(msg.reactions_json); } catch(e) {}
+      try { reactions = typeof msg.reactions_json === 'string' ? JSON.parse(msg.reactions_json) : msg.reactions_json; } catch(e) {}
       let replyTo = null;
-      try { replyTo = JSON.parse(msg.reply_to_data); } catch(e) {}
+      try { replyTo = typeof msg.reply_to_data === 'string' ? JSON.parse(msg.reply_to_data) : msg.reply_to_data; } catch(e) {}
 
       const key = generateConversationKey(msg.conversation_id);
       let content = msg.content;
@@ -45,16 +45,16 @@ router.get('/:conversationId', authGuard, (req, res) => {
       return {
         ...msg,
         content,
-        reactions: reactions.filter(r => r && r.emoji),
+        reactions: (reactions || []).filter(r => r && r.emoji),
         replyTo,
         reactions_json: undefined,
         reply_to_data: undefined
       };
     }).reverse();
 
-    const total = db.prepare(`
-      SELECT COUNT(*) as count FROM messages WHERE conversation_id = ? AND is_deleted = 0
-    `).get(req.params.conversationId);
+    const total = (await db.prepare(`
+      SELECT COUNT(*) as count FROM messages WHERE conversation_id = $1 AND is_deleted = 0
+    `).get(req.params.conversationId));
 
     res.json({
       messages: parsed,
@@ -71,10 +71,10 @@ router.get('/:conversationId', authGuard, (req, res) => {
   }
 });
 
-router.post('/:conversationId', authGuard, (req, res) => {
+router.post('/:conversationId', authGuard, async (req, res) => {
   try {
-    const isMember = db.prepare(`
-      SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?
+    const isMember = await db.prepare(`
+      SELECT 1 FROM conversation_members WHERE conversation_id = $1 AND user_id = $2
     `).get(req.params.conversationId, req.user.id);
 
     if (!isMember) {
@@ -93,21 +93,21 @@ router.post('/:conversationId', authGuard, (req, res) => {
     const msgId = uuidv4();
 
     if (replyTo) {
-      const replyMsg = db.prepare('SELECT id FROM messages WHERE id = ? AND conversation_id = ?')
+      const replyMsg = await db.prepare('SELECT id FROM messages WHERE id = $1 AND conversation_id = $2')
         .get(replyTo, req.params.conversationId);
       if (!replyMsg) {
         return res.status(400).json({ error: 'Pesan yang direply tidak ditemukan.' });
       }
     }
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO messages (id, conversation_id, sender_id, content, type, reply_to)
-      VALUES (?, ?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5, $6)
     `).run(msgId, req.params.conversationId, req.user.id, encryptedContent, type || 'text', replyTo || null);
 
-    const message = db.prepare(`
+    const message = await db.prepare(`
       SELECT m.*, u.username, u.display_name, u.avatar_url
-      FROM messages m JOIN users u ON m.sender_id = u.id WHERE m.id = ?
+      FROM messages m JOIN users u ON m.sender_id = u.id WHERE m.id = $1
     `).get(msgId);
 
     res.status(201).json({
@@ -123,9 +123,9 @@ router.post('/:conversationId', authGuard, (req, res) => {
   }
 });
 
-router.put('/:messageId', authGuard, (req, res) => {
+router.put('/:messageId', authGuard, async (req, res) => {
   try {
-    const msg = db.prepare('SELECT * FROM messages WHERE id = ? AND sender_id = ?')
+    const msg = await db.prepare('SELECT * FROM messages WHERE id = $1 AND sender_id = $2')
       .get(req.params.messageId, req.user.id);
 
     if (!msg) {
@@ -140,8 +140,8 @@ router.put('/:messageId', authGuard, (req, res) => {
     const key = generateConversationKey(msg.conversation_id);
     const encryptedContent = encryptMessage(content.trim(), key);
 
-    db.prepare(`
-      UPDATE messages SET content = ?, is_edited = 1, updated_at = datetime('now') WHERE id = ?
+    await db.prepare(`
+      UPDATE messages SET content = $1, is_edited = 1, updated_at = NOW() WHERE id = $2
     `).run(encryptedContent, req.params.messageId);
 
     res.json({ message: { ...msg, content: content.trim(), is_edited: 1 } });
@@ -151,16 +151,16 @@ router.put('/:messageId', authGuard, (req, res) => {
   }
 });
 
-router.delete('/:messageId', authGuard, (req, res) => {
+router.delete('/:messageId', authGuard, async (req, res) => {
   try {
-    const msg = db.prepare('SELECT * FROM messages WHERE id = ? AND sender_id = ?')
+    const msg = await db.prepare('SELECT * FROM messages WHERE id = $1 AND sender_id = $2')
       .get(req.params.messageId, req.user.id);
 
     if (!msg) {
       return res.status(404).json({ error: 'Pesan tidak ditemukan atau bukan milik Anda.' });
     }
 
-    db.prepare('UPDATE messages SET is_deleted = 1, content = \'[Pesan Dihapus]\' WHERE id = ?')
+    await db.prepare("UPDATE messages SET is_deleted = 1, content = '[Pesan Dihapus]' WHERE id = $1")
       .run(req.params.messageId);
 
     res.json({ message: 'Pesan berhasil dihapus.' });
@@ -170,26 +170,26 @@ router.delete('/:messageId', authGuard, (req, res) => {
   }
 });
 
-router.post('/:messageId/reaction', authGuard, (req, res) => {
+router.post('/:messageId/reaction', authGuard, async (req, res) => {
   try {
     const { emoji } = req.body;
-    const msg = db.prepare('SELECT * FROM messages WHERE id = ?').get(req.params.messageId);
+    const msg = await db.prepare('SELECT * FROM messages WHERE id = $1').get(req.params.messageId);
 
     if (!msg) {
       return res.status(404).json({ error: 'Pesan tidak ditemukan.' });
     }
 
-    const existing = db.prepare(`
-      SELECT id FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?
+    const existing = await db.prepare(`
+      SELECT id FROM reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3
     `).get(req.params.messageId, req.user.id, emoji);
 
     if (existing) {
-      db.prepare('DELETE FROM reactions WHERE id = ?').run(existing.id);
+      await db.prepare('DELETE FROM reactions WHERE id = $1').run(existing.id);
       return res.json({ action: 'removed', emoji });
     }
 
-    db.prepare(`
-      INSERT INTO reactions (id, message_id, user_id, emoji) VALUES (?, ?, ?, ?)
+    await db.prepare(`
+      INSERT INTO reactions (id, message_id, user_id, emoji) VALUES ($1, $2, $3, $4)
     `).run(uuidv4(), req.params.messageId, req.user.id, emoji);
 
     res.json({ action: 'added', emoji });
@@ -199,10 +199,10 @@ router.post('/:messageId/reaction', authGuard, (req, res) => {
   }
 });
 
-router.post('/:messageId/read', authGuard, (req, res) => {
+router.post('/:messageId/read', authGuard, async (req, res) => {
   try {
-    db.prepare(`
-      INSERT OR IGNORE INTO read_receipts (message_id, user_id) VALUES (?, ?)
+    await db.prepare(`
+      INSERT INTO read_receipts (message_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING
     `).run(req.params.messageId, req.user.id);
     res.json({ message: 'Marked as read.' });
   } catch (err) {

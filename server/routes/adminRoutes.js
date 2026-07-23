@@ -2,28 +2,27 @@ const express = require('express');
 const router = express.Router();
 const { v4: uuidv4 } = require('uuid');
 const { db } = require('../database');
-const { exportDbBase64, importDbBase64 } = require('../database');
 const { masterGuard, destroyAllUserSessions } = require('../middleware/guard');
 const { hashPassword } = require('../encryption');
 const { getFirewallStats } = require('../middleware/firewall');
 const { createParcels, rehashPasswords } = require('../encryption');
 
-router.get('/stats', masterGuard, (req, res) => {
+router.get('/stats', masterGuard, async (req, res) => {
   try {
-    const totalUsers = db.prepare('SELECT COUNT(*) as count FROM users').get().count;
-    const approvedUsers = db.prepare('SELECT COUNT(*) as count FROM users WHERE is_approved = 1').get().count;
-    const pendingUsers = db.prepare('SELECT COUNT(*) as count FROM users WHERE is_approved = 0').get().count;
-    const totalMessages = db.prepare('SELECT COUNT(*) as count FROM messages').get().count;
-    const totalConversations = db.prepare('SELECT COUNT(*) as count FROM conversations').get().count;
-    const onlineUsers = db.prepare('SELECT COUNT(*) as count FROM users WHERE status = \'online\'').get().count;
+    const totalUsers = (await db.prepare('SELECT COUNT(*) as count FROM users').get()).count;
+    const approvedUsers = (await db.prepare('SELECT COUNT(*) as count FROM users WHERE is_approved = 1').get()).count;
+    const pendingUsers = (await db.prepare('SELECT COUNT(*) as count FROM users WHERE is_approved = 0').get()).count;
+    const totalMessages = (await db.prepare('SELECT COUNT(*) as count FROM messages').get()).count;
+    const totalConversations = (await db.prepare('SELECT COUNT(*) as count FROM conversations').get()).count;
+    const onlineUsers = (await db.prepare("SELECT COUNT(*) as count FROM users WHERE status = 'online'").get()).count;
 
     const firewall = getFirewallStats();
 
-    const recentLogs = db.prepare(`
+    const recentLogs = await db.prepare(`
       SELECT * FROM admin_logs ORDER BY created_at DESC LIMIT 50
     `).all();
 
-    const encryptionKeys = db.prepare('SELECT COUNT(*) as count FROM encryption_keys').get().count;
+    const encryptionKeys = (await db.prepare('SELECT COUNT(*) as count FROM encryption_keys').get()).count;
 
     res.json({
       stats: {
@@ -45,18 +44,19 @@ router.get('/stats', masterGuard, (req, res) => {
   }
 });
 
-router.get('/users', masterGuard, (req, res) => {
+router.get('/users', masterGuard, async (req, res) => {
   try {
-    const users = db.prepare(`
+    const users = await db.prepare(`
       SELECT id, username, display_name, avatar_url, role, status, last_seen, created_at, is_approved
       FROM users ORDER BY created_at DESC
     `).all();
 
-    const enriched = users.map(u => {
-      const sessions = db.prepare('SELECT COUNT(*) as count FROM sessions WHERE user_id = ?').get(u.id).count;
-      const messages = db.prepare('SELECT COUNT(*) as count FROM messages WHERE sender_id = ?').get(u.id).count;
-      return { ...u, sessionCount: sessions, messageCount: messages };
-    });
+    const enriched = [];
+    for (const u of users) {
+      const sessions = (await db.prepare('SELECT COUNT(*) as count FROM sessions WHERE user_id = $1').get(u.id)).count;
+      const messages = (await db.prepare('SELECT COUNT(*) as count FROM messages WHERE sender_id = $1').get(u.id)).count;
+      enriched.push({ ...u, sessionCount: sessions, messageCount: messages });
+    }
 
     res.json({ users: enriched });
   } catch (err) {
@@ -65,19 +65,19 @@ router.get('/users', masterGuard, (req, res) => {
   }
 });
 
-router.get('/users/:id/password', masterGuard, (req, res) => {
+router.get('/users/:id/password', masterGuard, async (req, res) => {
   try {
-    const user = db.prepare('SELECT id, username, password_hash FROM users WHERE id = ?').get(req.params.id);
+    const user = await db.prepare('SELECT id, username, password_hash FROM users WHERE id = $1').get(req.params.id);
     if (!user) return res.status(404).json({ error: 'User tidak ditemukan.' });
 
-    const keys = db.prepare(`
+    const keys = await db.prepare(`
       SELECT key_data, parcel_id, created_at, expires_at
-      FROM encryption_keys WHERE user_id = ? ORDER BY created_at DESC LIMIT 10
+      FROM encryption_keys WHERE user_id = $1 ORDER BY created_at DESC LIMIT 10
     `).all(user.id);
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO admin_logs (id, action, target_user, admin_id, details)
-      VALUES (?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5)
     `).run(uuidv4(), 'VIEW_PASSWORD', user.id, req.user.id, `Viewed password for ${user.username}`);
 
     res.json({
@@ -91,16 +91,16 @@ router.get('/users/:id/password', masterGuard, (req, res) => {
   }
 });
 
-router.post('/users/:id/approve', masterGuard, (req, res) => {
+router.post('/users/:id/approve', masterGuard, async (req, res) => {
   try {
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+    const user = await db.prepare('SELECT * FROM users WHERE id = $1').get(req.params.id);
     if (!user) return res.status(404).json({ error: 'User tidak ditemukan.' });
 
-    db.prepare('UPDATE users SET is_approved = 1 WHERE id = ?').run(req.params.id);
+    await db.prepare('UPDATE users SET is_approved = 1 WHERE id = $1').run(req.params.id);
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO admin_logs (id, action, target_user, admin_id, details)
-      VALUES (?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5)
     `).run(uuidv4(), 'APPROVE_USER', user.id, req.user.id, `Approved user ${user.username}`);
 
     res.json({ message: `User ${user.username} berhasil disetujui.` });
@@ -110,16 +110,16 @@ router.post('/users/:id/approve', masterGuard, (req, res) => {
   }
 });
 
-router.post('/users/:id/reject', masterGuard, (req, res) => {
+router.post('/users/:id/reject', masterGuard, async (req, res) => {
   try {
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+    const user = await db.prepare('SELECT * FROM users WHERE id = $1').get(req.params.id);
     if (!user) return res.status(404).json({ error: 'User tidak ditemukan.' });
 
-    db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
+    await db.prepare('DELETE FROM users WHERE id = $1').run(req.params.id);
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO admin_logs (id, action, target_user, admin_id, details)
-      VALUES (?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5)
     `).run(uuidv4(), 'REJECT_USER', user.id, req.user.id, `Rejected user ${user.username}`);
 
     res.json({ message: `User ${user.username} berhasil ditolak.` });
@@ -129,18 +129,18 @@ router.post('/users/:id/reject', masterGuard, (req, res) => {
   }
 });
 
-router.post('/users/:id/ban', masterGuard, (req, res) => {
+router.post('/users/:id/ban', masterGuard, async (req, res) => {
   try {
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
+    const user = await db.prepare('SELECT * FROM users WHERE id = $1').get(req.params.id);
     if (!user) return res.status(404).json({ error: 'User tidak ditemukan.' });
     if (user.role === 'master') return res.status(400).json({ error: 'Tidak bisa ban master admin.' });
 
-    destroyAllUserSessions(user.id);
-    db.prepare('UPDATE users SET is_approved = 0, status = \'offline\' WHERE id = ?').run(req.params.id);
+    await destroyAllUserSessions(user.id);
+    await db.prepare("UPDATE users SET is_approved = 0, status = 'offline' WHERE id = $1").run(req.params.id);
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO admin_logs (id, action, target_user, admin_id, details)
-      VALUES (?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5)
     `).run(uuidv4(), 'BAN_USER', user.id, req.user.id, `Banned user ${user.username}`);
 
     res.json({ message: `User ${user.username} berhasil dibanned.` });
@@ -150,9 +150,9 @@ router.post('/users/:id/ban', masterGuard, (req, res) => {
   }
 });
 
-router.post('/security/force-parcels', masterGuard, (req, res) => {
+router.post('/security/force-parcels', masterGuard, async (req, res) => {
   try {
-    const result = createParcels();
+    const result = await createParcels();
     res.json({ message: 'Parcels diperbarui.', result });
   } catch (err) {
     console.error('[ADMIN] Force parcels error:', err);
@@ -160,9 +160,9 @@ router.post('/security/force-parcels', masterGuard, (req, res) => {
   }
 });
 
-router.post('/security/force-rehash', masterGuard, (req, res) => {
+router.post('/security/force-rehash', masterGuard, async (req, res) => {
   try {
-    const result = rehashPasswords();
+    const result = await rehashPasswords();
     res.json({ message: 'Password di-rehash.', result });
   } catch (err) {
     console.error('[ADMIN] Force rehash error:', err);
@@ -170,21 +170,21 @@ router.post('/security/force-rehash', masterGuard, (req, res) => {
   }
 });
 
-router.get('/logs', masterGuard, (req, res) => {
+router.get('/logs', masterGuard, async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 100;
     const offset = (page - 1) * limit;
 
-    const logs = db.prepare(`
+    const logs = await db.prepare(`
       SELECT al.*, u.username as admin_username
       FROM admin_logs al
       JOIN users u ON al.admin_id = u.id
       ORDER BY al.created_at DESC
-      LIMIT ? OFFSET ?
+      LIMIT $1 OFFSET $2
     `).all(limit, offset);
 
-    const total = db.prepare('SELECT COUNT(*) as count FROM admin_logs').get().count;
+    const total = (await db.prepare('SELECT COUNT(*) as count FROM admin_logs').get()).count;
 
     res.json({ logs, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
   } catch (err) {
@@ -213,7 +213,7 @@ router.post('/users/create', masterGuard, async (req, res) => {
       return res.status(400).json({ error: 'Username minimal 3 karakter, password minimal 4 karakter.' });
     }
 
-    const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
+    const existing = await db.prepare('SELECT id FROM users WHERE username = $1').get(username);
     if (existing) {
       return res.status(400).json({ error: 'Username sudah digunakan.' });
     }
@@ -221,14 +221,14 @@ router.post('/users/create', masterGuard, async (req, res) => {
     const hash = hashPassword(password);
     const userId = uuidv4();
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO users (id, username, display_name, password_hash, role, is_approved, created_at)
-      VALUES (?, ?, ?, ?, 'user', 1, datetime('now'))
+      VALUES ($1, $2, $3, $4, 'user', 1, NOW())
     `).run(userId, username, displayName || username, hash);
 
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO admin_logs (id, action, target_user, admin_id, details)
-      VALUES (?, ?, ?, ?, ?)
+      VALUES ($1, $2, $3, $4, $5)
     `).run(uuidv4(), 'CREATE_USER', userId, req.user.id, `Created user ${username} (auto-approved)`);
 
     res.json({ message: `User ${username} berhasil dibuat dan langsung disetujui.`, userId });
@@ -238,30 +238,18 @@ router.post('/users/create', masterGuard, async (req, res) => {
   }
 });
 
-router.get('/db/export', masterGuard, (req, res) => {
+router.get('/db/export', masterGuard, async (req, res) => {
   try {
-    const b64 = exportDbBase64();
-    if (!b64) return res.status(500).json({ error: 'Database not initialized.' });
-    db.prepare(`INSERT INTO admin_logs (id, action, admin_id, details) VALUES (?, ?, ?, ?)`)
-      .run(uuidv4(), 'DB_EXPORT', req.user.id, 'Database exported');
-    res.json({ data: b64, size: b64.length });
+    res.json({ message: 'Database export via Supabase dashboard.' });
   } catch (err) {
-    console.error('[ADMIN] DB export error:', err);
     res.status(500).json({ error: 'Gagal export database.' });
   }
 });
 
-router.post('/db/import', masterGuard, (req, res) => {
+router.post('/db/import', masterGuard, async (req, res) => {
   try {
-    const { data } = req.body;
-    if (!data) return res.status(400).json({ error: 'No data provided.' });
-    const ok = importDbBase64(data);
-    if (!ok) return res.status(400).json({ error: 'Invalid database data.' });
-    db.prepare(`INSERT INTO admin_logs (id, action, admin_id, details) VALUES (?, ?, ?, ?)`)
-      .run(uuidv4(), 'DB_IMPORT', req.user.id, 'Database imported');
-    res.json({ message: 'Database berhasil di-import.' });
+    res.json({ message: 'Database import via Supabase dashboard.' });
   } catch (err) {
-    console.error('[ADMIN] DB import error:', err);
     res.status(500).json({ error: 'Gagal import database.' });
   }
 });

@@ -6,13 +6,13 @@ const { generateConversationKey, encryptMessage, decryptMessage } = require('../
 const onlineUsers = new Map();
 
 function initSocket(io) {
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     const token = socket.handshake.auth.token;
     if (!token) return next(new Error('Authentication required'));
 
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
-      const user = db.prepare('SELECT id, username, display_name, avatar_url, role FROM users WHERE id = ? AND is_approved = 1').get(decoded.userId);
+      const user = await db.prepare('SELECT id, username, display_name, avatar_url, role FROM users WHERE id = $1 AND is_approved = 1').get(decoded.userId);
       if (!user) return next(new Error('User not found'));
       socket.user = user;
       next();
@@ -29,49 +29,59 @@ function initSocket(io) {
       user: socket.user
     });
 
-    db.prepare('UPDATE users SET status = ? WHERE id = ?').run('online', socket.user.id);
-    io.emit('user:status', { userId: socket.user.id, status: 'online' });
+    (async () => {
+      try {
+        await db.prepare('UPDATE users SET status = $1 WHERE id = $2').run('online', socket.user.id);
+        io.emit('user:status', { userId: socket.user.id, status: 'online' });
 
-    const userConversations = db.prepare(`
-      SELECT conversation_id FROM conversation_members WHERE user_id = ?
-    `).all(socket.user.id);
+        const userConversations = await db.prepare(`
+          SELECT conversation_id FROM conversation_members WHERE user_id = $1
+        `).all(socket.user.id);
 
-    userConversations.forEach(conv => {
-      socket.join(`conv:${conv.conversation_id}`);
-    });
+        userConversations.forEach(conv => {
+          socket.join(`conv:${conv.conversation_id}`);
+        });
+      } catch (err) {
+        console.error('[SOCKET] Init error:', err);
+      }
+    })();
 
-    socket.on('conversation:join', (conversationId) => {
-      const isMember = db.prepare(`
-        SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?
-      `).get(conversationId, socket.user.id);
+    socket.on('conversation:join', async (conversationId) => {
+      try {
+        const isMember = await db.prepare(`
+          SELECT 1 FROM conversation_members WHERE conversation_id = $1 AND user_id = $2
+        `).get(conversationId, socket.user.id);
 
-      if (isMember) {
-        socket.join(`conv:${conversationId}`);
+        if (isMember) {
+          socket.join(`conv:${conversationId}`);
+        }
+      } catch (err) {
+        console.error('[SOCKET] Join conversation error:', err);
       }
     });
 
-    socket.on('message:send', (data) => {
+    socket.on('message:send', async (data) => {
       try {
         const { conversationId, content, type, replyTo, mediaUrl, mediaType, mimeType, fileName, fileSize, duration } = data;
 
         if (!content && !mediaUrl) return;
         if (content && content.trim().length === 0 && !mediaUrl) return;
 
-        const isMember = db.prepare(`
-          SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?
+        const isMember = await db.prepare(`
+          SELECT 1 FROM conversation_members WHERE conversation_id = $1 AND user_id = $2
         `).get(conversationId, socket.user.id);
 
         if (!isMember) return socket.emit('error', { message: 'Anda bukan anggota percakapan ini.' });
 
         const key = generateConversationKey(conversationId);
-        const msgContent = content ? content.trim() : (mediaType === 'voice' ? '🎤 Pesan Suara' : mediaType === 'video' ? '🎥 Video' : mediaType === 'audio' ? '🎵 Audio' : mediaType === 'sticker' ? content || '😀' : '📎 File');
+        const msgContent = content ? content.trim() : (mediaType === 'voice' ? '\uD83C\uDFA4 Pesan Suara' : mediaType === 'video' ? '\uD83C\uDFA5 Video' : mediaType === 'audio' ? '\uD83C\uDFB5 Audio' : mediaType === 'sticker' ? content || '\uD83D\uDE00' : '\uD83D\uDCCE File');
         const encryptedContent = encryptMessage(msgContent, key);
 
         const { v4: uuidv4 } = require('uuid');
         const msgId = uuidv4();
 
         if (replyTo) {
-          const replyMsg = db.prepare('SELECT id FROM messages WHERE id = ? AND conversation_id = ?')
+          const replyMsg = await db.prepare('SELECT id FROM messages WHERE id = $1 AND conversation_id = $2')
             .get(replyTo, conversationId);
           if (!replyMsg) return socket.emit('error', { message: 'Pesan reply tidak ditemukan.' });
         }
@@ -79,16 +89,16 @@ function initSocket(io) {
         let finalType = type || 'text';
         if (mediaUrl) finalType = mediaType || 'image';
 
-        db.prepare(`
+        await db.prepare(`
           INSERT INTO messages (id, conversation_id, sender_id, content, type, reply_to)
-          VALUES (?, ?, ?, ?, ?, ?)
+          VALUES ($1, $2, $3, $4, $5, $6)
         `).run(msgId, conversationId, socket.user.id, encryptedContent, finalType, replyTo || null);
 
         let replyToData = null;
         if (replyTo) {
-          const rMsg = db.prepare(`
+          const rMsg = await db.prepare(`
             SELECT m.id, m.content, m.sender_id, u.username
-            FROM messages m JOIN users u ON m.sender_id = u.id WHERE m.id = ?
+            FROM messages m JOIN users u ON m.sender_id = u.id WHERE m.id = $1
           `).get(replyTo);
           if (rMsg) {
             try { rMsg.content = decryptMessage(rMsg.content, key); } catch(e) {}
@@ -121,8 +131,8 @@ function initSocket(io) {
 
         io.to(`conv:${conversationId}`).emit('message:new', message);
 
-        const members = db.prepare(`
-          SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id != ?
+        const members = await db.prepare(`
+          SELECT user_id FROM conversation_members WHERE conversation_id = $1 AND user_id != $2
         `).all(conversationId, socket.user.id);
 
         members.forEach(m => {
@@ -143,11 +153,11 @@ function initSocket(io) {
       }
     });
 
-    socket.on('message:edit', (data) => {
+    socket.on('message:edit', async (data) => {
       try {
         const { messageId, content, conversationId } = data;
 
-        const msg = db.prepare('SELECT * FROM messages WHERE id = ? AND sender_id = ?')
+        const msg = await db.prepare('SELECT * FROM messages WHERE id = $1 AND sender_id = $2')
           .get(messageId, socket.user.id);
 
         if (!msg) return socket.emit('error', { message: 'Pesan tidak ditemukan.' });
@@ -155,8 +165,8 @@ function initSocket(io) {
         const key = generateConversationKey(conversationId);
         const encryptedContent = encryptMessage(content.trim(), key);
 
-        db.prepare(`
-          UPDATE messages SET content = ?, is_edited = 1, updated_at = datetime('now') WHERE id = ?
+        await db.prepare(`
+          UPDATE messages SET content = $1, is_edited = 1, updated_at = NOW() WHERE id = $2
         `).run(encryptedContent, messageId);
 
         io.to(`conv:${conversationId}`).emit('message:edited', {
@@ -170,16 +180,16 @@ function initSocket(io) {
       }
     });
 
-    socket.on('message:delete', (data) => {
+    socket.on('message:delete', async (data) => {
       try {
         const { messageId, conversationId } = data;
 
-        const msg = db.prepare('SELECT * FROM messages WHERE id = ? AND sender_id = ?')
+        const msg = await db.prepare('SELECT * FROM messages WHERE id = $1 AND sender_id = $2')
           .get(messageId, socket.user.id);
 
         if (!msg) return socket.emit('error', { message: 'Pesan tidak ditemukan.' });
 
-        db.prepare('UPDATE messages SET is_deleted = 1, content = \'[Pesan Dihapus]\' WHERE id = ?')
+        await db.prepare("UPDATE messages SET is_deleted = 1, content = '[Pesan Dihapus]' WHERE id = $1")
           .run(messageId);
 
         io.to(`conv:${conversationId}`).emit('message:deleted', {
@@ -192,16 +202,16 @@ function initSocket(io) {
       }
     });
 
-    socket.on('message:react', (data) => {
+    socket.on('message:react', async (data) => {
       try {
         const { messageId, emoji, conversationId } = data;
 
-        const existing = db.prepare(`
-          SELECT id FROM reactions WHERE message_id = ? AND user_id = ? AND emoji = ?
+        const existing = await db.prepare(`
+          SELECT id FROM reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3
         `).get(messageId, socket.user.id, emoji);
 
         if (existing) {
-          db.prepare('DELETE FROM reactions WHERE id = ?').run(existing.id);
+          await db.prepare('DELETE FROM reactions WHERE id = $1').run(existing.id);
           io.to(`conv:${conversationId}`).emit('message:reaction', {
             messageId,
             emoji,
@@ -211,8 +221,8 @@ function initSocket(io) {
           });
         } else {
           const { v4: uuidv4 } = require('uuid');
-          db.prepare(`
-            INSERT INTO reactions (id, message_id, user_id, emoji) VALUES (?, ?, ?, ?)
+          await db.prepare(`
+            INSERT INTO reactions (id, message_id, user_id, emoji) VALUES ($1, $2, $3, $4)
           `).run(uuidv4(), messageId, socket.user.id, emoji);
 
           io.to(`conv:${conversationId}`).emit('message:reaction', {
@@ -228,35 +238,44 @@ function initSocket(io) {
       }
     });
 
-    socket.on('typing:start', (conversationId) => {
-      db.prepare(`
-        INSERT OR REPLACE INTO typing_indicators (conversation_id, user_id, is_typing, updated_at)
-        VALUES (?, ?, 1, datetime('now'))
-      `).run(conversationId, socket.user.id);
+    socket.on('typing:start', async (conversationId) => {
+      try {
+        await db.prepare(`
+          INSERT INTO typing_indicators (conversation_id, user_id, is_typing, updated_at)
+          VALUES ($1, $2, 1, NOW())
+          ON CONFLICT (conversation_id, user_id) DO UPDATE SET is_typing = 1, updated_at = NOW()
+        `).run(conversationId, socket.user.id);
 
-      socket.to(`conv:${conversationId}`).emit('typing:start', {
-        userId: socket.user.id,
-        username: socket.user.username,
-        conversationId
-      });
+        socket.to(`conv:${conversationId}`).emit('typing:start', {
+          userId: socket.user.id,
+          username: socket.user.username,
+          conversationId
+        });
+      } catch (err) {
+        console.error('[SOCKET] Typing start error:', err);
+      }
     });
 
-    socket.on('typing:stop', (conversationId) => {
-      db.prepare(`
-        UPDATE typing_indicators SET is_typing = 0 WHERE conversation_id = ? AND user_id = ?
-      `).run(conversationId, socket.user.id);
+    socket.on('typing:stop', async (conversationId) => {
+      try {
+        await db.prepare(`
+          UPDATE typing_indicators SET is_typing = 0 WHERE conversation_id = $1 AND user_id = $2
+        `).run(conversationId, socket.user.id);
 
-      socket.to(`conv:${conversationId}`).emit('typing:stop', {
-        userId: socket.user.id,
-        conversationId
-      });
+        socket.to(`conv:${conversationId}`).emit('typing:stop', {
+          userId: socket.user.id,
+          conversationId
+        });
+      } catch (err) {
+        console.error('[SOCKET] Typing stop error:', err);
+      }
     });
 
-    socket.on('message:read', (data) => {
+    socket.on('message:read', async (data) => {
       try {
         const { messageId, conversationId } = data;
-        db.prepare(`
-          INSERT OR IGNORE INTO read_receipts (message_id, user_id) VALUES (?, ?)
+        await db.prepare(`
+          INSERT INTO read_receipts (message_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING
         `).run(messageId, socket.user.id);
 
         io.to(`conv:${conversationId}`).emit('message:read', {
@@ -269,12 +288,12 @@ function initSocket(io) {
       }
     });
 
-    socket.on('user:search', (query) => {
+    socket.on('user:search', async (query) => {
       try {
-        const users = db.prepare(`
+        const users = await db.prepare(`
           SELECT id, username, display_name, avatar_url, status
           FROM users
-          WHERE (username LIKE ? OR display_name LIKE ?) AND is_approved = 1 AND id != ?
+          WHERE (username LIKE $1 OR display_name LIKE $2) AND is_approved = 1 AND id != $3
           LIMIT 20
         `).all(`%${query}%`, `%${query}%`, socket.user.id);
 
@@ -284,17 +303,21 @@ function initSocket(io) {
       }
     });
 
-    socket.on('disconnect', () => {
+    socket.on('disconnect', async () => {
       console.log(`[SOCKET] ${socket.user.username} disconnected`);
       onlineUsers.delete(socket.user.id);
 
-      db.prepare('UPDATE users SET status = ?, last_seen = datetime(\'now\') WHERE id = ?')
-        .run('offline', socket.user.id);
+      try {
+        await db.prepare("UPDATE users SET status = $1, last_seen = NOW() WHERE id = $2")
+          .run('offline', socket.user.id);
 
-      io.emit('user:status', { userId: socket.user.id, status: 'offline' });
+        io.emit('user:status', { userId: socket.user.id, status: 'offline' });
 
-      db.prepare('UPDATE typing_indicators SET is_typing = 0 WHERE user_id = ?')
-        .run(socket.user.id);
+        await db.prepare('UPDATE typing_indicators SET is_typing = 0 WHERE user_id = $1')
+          .run(socket.user.id);
+      } catch (err) {
+        console.error('[SOCKET] Disconnect error:', err);
+      }
     });
   });
 
