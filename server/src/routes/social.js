@@ -24,7 +24,6 @@ router.get('/feed', authGuard, async (req, res) => {
       (postUsers || []).forEach(u => { postUserMap[u.id] = u; });
     }
     
-    const postIds = (posts || []).map(p => p.id);
     const [likesData, commentsData] = await Promise.all([
       postIds.length > 0 ? sb.from('post_likes').select('post_id, user_id').in('post_id', postIds) : { data: [] },
       postIds.length > 0 ? sb.from('post_comments').select('post_id, id').in('post_id', postIds) : { data: [] }
