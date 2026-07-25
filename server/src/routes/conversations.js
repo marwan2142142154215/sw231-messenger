@@ -14,38 +14,36 @@ router.get('/', authGuard, async (req, res) => {
     if (!memberOf || memberOf.length === 0) return res.json({ conversations: [] });
     
     const convIds = memberOf.map(m => m.conversation_id);
-    const { data: convs } = await sb.from('conversations')
-      .select('id, type, name, created_by, created_at').in('id', convIds);
-    
-    const { data: allMembers } = await sb.from('conversation_members')
-      .select('conversation_id, user_id, role').in('conversation_id', convIds);
+
+    const [convsResult, allMembersResult, lastMsgsResult] = await Promise.all([
+      sb.from('conversations').select('id, type, name, created_by, created_at').in('id', convIds),
+      sb.from('conversation_members').select('conversation_id, user_id, role').in('conversation_id', convIds),
+      sb.from('messages').select('conversation_id, content, created_at, sender_id, is_deleted, type, media_url')
+        .in('conversation_id', convIds).eq('is_deleted', 0).order('created_at', { ascending: false })
+    ]);
     
     const userIdSet = new Set();
-    (allMembers || []).forEach(m => userIdSet.add(m.user_id));
+    (allMembersResult.data || []).forEach(m => userIdSet.add(m.user_id));
     
-    const { data: allUsers } = await sb.from('users')
-      .select('id, username, display_name, avatar_url, status, last_seen').in('id', [...userIdSet]);
+    const allUsersResult = userIdSet.size > 0
+      ? await sb.from('users').select('id, username, display_name, avatar_url, status, last_seen').in('id', [...userIdSet])
+      : { data: [] };
     
     const userMap = {};
-    (allUsers || []).forEach(u => { userMap[u.id] = u; });
+    (allUsersResult.data || []).forEach(u => { userMap[u.id] = u; });
     
     const memberMap = {};
-    (allMembers || []).forEach(m => {
+    (allMembersResult.data || []).forEach(m => {
       if (!memberMap[m.conversation_id]) memberMap[m.conversation_id] = [];
       memberMap[m.conversation_id].push({ ...userMap[m.user_id], role: m.role });
     });
     
-    const { data: lastMsgs } = await sb.from('messages')
-      .select('conversation_id, content, created_at, sender_id, is_deleted, type, media_url')
-      .in('conversation_id', convIds).eq('is_deleted', 0)
-      .order('created_at', { ascending: false });
-    
     const lastMsgMap = {};
-    (lastMsgs || []).forEach(m => {
+    (lastMsgsResult.data || []).forEach(m => {
       if (!lastMsgMap[m.conversation_id]) lastMsgMap[m.conversation_id] = m;
     });
     
-    const conversations = (convs || []).map(conv => {
+    const conversations = (convsResult.data || []).map(conv => {
       const members = memberMap[conv.id] || [];
       const lastMsg = lastMsgMap[conv.id];
       let lastMessage = null;

@@ -67,10 +67,39 @@ export default function ChatArea() {
   const onlineUsers = useChatStore(s => s.onlineUsers)
   const user = useAuthStore(s => s.user)
   const typingTimeout = useRef(null)
+  const prevConvIdRef = useRef(null)
+  const initialLoadDoneRef = useRef(false)
 
   const scrollToBottom = useCallback((smooth = true) => {
     messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant' })
   }, [])
+
+  useEffect(() => {
+    if (!activeConversation) return
+    if (activeConversation.id !== prevConvIdRef.current) {
+      prevConvIdRef.current = activeConversation.id
+      initialLoadDoneRef.current = false
+      socketEmit('conversation:join', activeConversation.id)
+      setSearchQuery('')
+      setSearchMatches([])
+      setShowSearch(false)
+      setUnreadCount(0)
+      setIsAtBottom(true)
+      lastSeenMsgCountRef.current = 0
+    }
+  }, [activeConversation])
+
+  useEffect(() => {
+    if (!activeConversation) return
+    if (messages.length > 0 && !initialLoadDoneRef.current) {
+      initialLoadDoneRef.current = true
+      requestAnimationFrame(() => { scrollToBottom(false) })
+      return
+    }
+    if (isAtBottom && messages.length > 0) {
+      requestAnimationFrame(() => { scrollToBottom(true) })
+    }
+  }, [messages.length, activeConversation])
 
   useEffect(() => {
     if (isAtBottom) {
@@ -80,17 +109,6 @@ export default function ChatArea() {
     }
     lastSeenMsgCountRef.current = messages.length
   }, [messages, isAtBottom])
-
-  useEffect(() => {
-    if (activeConversation) {
-      socketEmit('conversation:join', activeConversation.id)
-      setSearchQuery('')
-      setSearchMatches([])
-      setShowSearch(false)
-      setUnreadCount(0)
-      lastSeenMsgCountRef.current = 0
-    }
-  }, [activeConversation])
 
   useEffect(() => {
     if (!activeConversation || !user || messages.length === 0) return

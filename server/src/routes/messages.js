@@ -12,68 +12,60 @@ router.get('/:conversationId', authGuard, async (req, res) => {
     const convId = req.params.conversationId;
     if (!convId || typeof convId !== 'string' || convId.length > 100) return res.status(400).json({ error: 'Invalid conversation ID' });
 
-    const { data: isMember, error: memberErr } = await sb.from('conversation_members')
-      .select('conversation_id').eq('conversation_id', convId).eq('user_id', req.user.id).single();
-    if (memberErr) console.error('[MSG-API] Member check error:', memberErr.message);
-    if (!isMember) return res.status(403).json({ error: 'Not a member' });
-
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
     const cursor = req.query.cursor;
 
-    let query = sb.from('messages')
-      .select('id, conversation_id, sender_id, content, type, reply_to, is_edited, is_deleted, created_at, updated_at, media_url, media_type, mime_type, file_name, file_size, duration')
-      .eq('conversation_id', convId).eq('is_deleted', 0)
-      .order('created_at', { ascending: false }).limit(limit);
+    const [memberResult, messagesResult] = await Promise.all([
+      sb.from('conversation_members').select('conversation_id').eq('conversation_id', convId).eq('user_id', req.user.id).single(),
+      (() => {
+        let q = sb.from('messages')
+          .select('id, conversation_id, sender_id, content, type, reply_to, is_edited, is_deleted, created_at, updated_at, media_url, media_type, mime_type, file_name, file_size, duration')
+          .eq('conversation_id', convId).eq('is_deleted', 0)
+          .order('created_at', { ascending: false }).limit(limit);
+        if (cursor && typeof cursor === 'string') q = q.lt('created_at', cursor);
+        return q;
+      })()
+    ]);
 
-    if (cursor && typeof cursor === 'string') query = query.lt('created_at', cursor);
-    const { data: messages, error: msgErr } = await query;
-    if (msgErr) console.error('[MSG-API] Query error:', msgErr.message);
+    if (!memberResult.data) return res.status(403).json({ error: 'Not a member' });
 
+    const messages = messagesResult.data || [];
     const key = generateConversationKey(convId);
-    const msgIds = (messages || []).map(m => m.id);
-
-    const senderIds = [...new Set((messages || []).map(m => m.sender_id).filter(Boolean))];
-    const replyMsgIds = [...new Set((messages || []).map(m => m.reply_to).filter(Boolean))];
+    const msgIds = messages.map(m => m.id);
+    const senderIds = [...new Set(messages.map(m => m.sender_id).filter(Boolean))];
+    const replyMsgIds = [...new Set(messages.map(m => m.reply_to).filter(Boolean))];
     const allUserIds = [...new Set([...senderIds, ...replyMsgIds])];
 
-    let userMap = {};
-    if (allUserIds.length > 0) {
-      const { data: users } = await sb.from('users')
-        .select('id, username, display_name, avatar_url, status, last_seen').in('id', allUserIds);
-      (users || []).forEach(u => { userMap[u.id] = u; });
-    }
-
-    const [reactionsResult, replyResult, readResult] = await Promise.all([
+    const [usersResult, reactionsResult, replyResult, readResult] = await Promise.all([
+      allUserIds.length > 0 ? sb.from('users').select('id, username, display_name, avatar_url, status, last_seen').in('id', allUserIds) : { data: [] },
       msgIds.length > 0 ? sb.from('reactions').select('message_id, emoji, user_id').in('message_id', msgIds) : { data: [] },
       replyMsgIds.length > 0 ? sb.from('messages').select('id, content, sender_id, type').in('id', replyMsgIds) : { data: [] },
       msgIds.length > 0 ? sb.from('read_receipts').select('message_id, user_id').in('message_id', msgIds) : { data: [] }
     ]);
 
-    const reactionUserIds = [...new Set((reactionsResult.data || []).map(r => r.user_id).filter(Boolean))];
-    let reactionUserMap = {};
-    if (reactionUserIds.length > 0) {
-      const { data: rUsers } = await sb.from('users').select('id, username, display_name').in('id', reactionUserIds);
-      (rUsers || []).forEach(u => { reactionUserMap[u.id] = u; });
-    }
+    const userMap = {};
+    (usersResult.data || []).forEach(u => { userMap[u.id] = u; });
 
-    const readReceiptsUserIds = [...new Set((readResult.data || []).map(r => r.user_id).filter(Boolean))];
-    let readUserMap = {};
-    if (readReceiptsUserIds.length > 0) {
-      const { data: rUsers } = await sb.from('users').select('id, username, display_name').in('id', readReceiptsUserIds);
-      (rUsers || []).forEach(u => { readUserMap[u.id] = u; });
+    const reactionUserIds = [...new Set((reactionsResult.data || []).map(r => r.user_id).filter(Boolean))];
+    const readUserIds = [...new Set((readResult.data || []).map(r => r.user_id).filter(Boolean))];
+    const extraUserIds = [...new Set([...reactionUserIds, ...readUserIds])].filter(id => !userMap[id]);
+
+    if (extraUserIds.length > 0) {
+      const { data: extraUsers } = await sb.from('users').select('id, username, display_name').in('id', extraUserIds);
+      (extraUsers || []).forEach(u => { userMap[u.id] = u; });
     }
 
     const readByMap = {};
     (readResult.data || []).forEach(r => {
       if (!readByMap[r.message_id]) readByMap[r.message_id] = [];
-      const rUser = readUserMap[r.user_id] || {};
+      const rUser = userMap[r.user_id] || {};
       readByMap[r.message_id].push({ userId: r.user_id, username: rUser.username, display_name: rUser.display_name });
     });
 
     const reactionsMap = {};
     (reactionsResult.data || []).forEach(r => {
       if (!reactionsMap[r.message_id]) reactionsMap[r.message_id] = [];
-      const rUser = reactionUserMap[r.user_id] || userMap[r.user_id] || {};
+      const rUser = userMap[r.user_id] || {};
       reactionsMap[r.message_id].push({ emoji: r.emoji, userId: r.user_id, username: rUser.username, display_name: rUser.display_name });
     });
 
@@ -85,7 +77,7 @@ router.get('/:conversationId', authGuard, async (req, res) => {
       replyToMap[r.id] = { id: r.id, content: rc?.substring(0, 100), sender_id: r.sender_id, username: rUser.username, display_name: rUser.display_name };
     });
 
-    const parsed = (messages || []).reverse().map(msg => {
+    const parsed = messages.reverse().map(msg => {
       const sender = userMap[msg.sender_id] || {};
       let content = msg.content;
       try { content = decryptMessage(msg.content, key); } catch {}
@@ -103,7 +95,7 @@ router.get('/:conversationId', authGuard, async (req, res) => {
       };
     });
 
-    res.json({ messages: parsed, hasMore: (messages || []).length === limit, nextCursor: parsed.length > 0 ? parsed[0].created_at : null });
+    res.json({ messages: parsed, hasMore: messages.length === limit, nextCursor: parsed.length > 0 ? parsed[0].created_at : null });
   } catch (err) {
     console.error('[MSG] Get error:', err);
     res.status(500).json({ error: 'Failed to fetch messages' });

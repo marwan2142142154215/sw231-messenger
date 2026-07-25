@@ -96,16 +96,22 @@ function initSocket(io) {
         }
 
         const sb = getSupabase();
-        const { data: isMember, error: memberErr } = await sb.from('conversation_members')
-          .select('conversation_id').eq('conversation_id', conversationId).eq('user_id', socket.user.id).single();
-        if (memberErr || !isMember) {
+        const key = generateConversationKey(conversationId);
+
+        const [memberResult, replyResult] = await Promise.all([
+          sb.from('conversation_members').select('conversation_id').eq('conversation_id', conversationId).eq('user_id', socket.user.id).single(),
+          (replyTo && typeof replyTo === 'string')
+            ? sb.from('messages').select('id, content, sender_id').eq('id', replyTo).single()
+            : Promise.resolve({ data: null })
+        ]);
+
+        if (!memberResult.data) {
           socket.emit('message:error', { error: 'Not a member', tempId });
           return;
         }
 
         updateLastSeen();
 
-        const key = generateConversationKey(conversationId);
         let msgContent = content ? String(content).trim() : (mediaType === 'voice' ? '🎤 Voice' : mediaType === 'video' ? '🎥 Video' : mediaType === 'audio' ? '🎵 Audio' : mediaType === 'sticker' ? (content || '😀') : '📎 File');
         const encryptedContent = encryptMessage(msgContent, key);
         const msgId = tempId || uuidv4();
@@ -114,14 +120,11 @@ function initSocket(io) {
         if (mediaUrl) finalType = mediaType || 'image';
 
         let replyToData = null;
-        if (replyTo && typeof replyTo === 'string') {
-          const { data: rMsg } = await sb.from('messages')
-            .select('id, content, sender_id').eq('id', replyTo).single();
-          if (rMsg) {
-            try { rMsg.content = decryptMessage(rMsg.content, key); } catch {}
-            const { data: rUser } = await sb.from('users').select('username, display_name').eq('id', rMsg.sender_id).single();
-            replyToData = { id: rMsg.id, content: rMsg.content?.substring(0, 100), sender_id: rMsg.sender_id, username: rUser?.username, display_name: rUser?.display_name };
-          }
+        if (replyResult.data) {
+          const rMsg = replyResult.data;
+          try { rMsg.content = decryptMessage(rMsg.content, key); } catch {}
+          const { data: rUser } = await sb.from('users').select('username, display_name').eq('id', rMsg.sender_id).single();
+          replyToData = { id: rMsg.id, content: rMsg.content?.substring(0, 100), sender_id: rMsg.sender_id, username: rUser?.username, display_name: rUser?.display_name };
         }
 
         const message = {
@@ -131,27 +134,28 @@ function initSocket(io) {
           duration: duration || null, reply_to: replyTo || null, replyTo: replyToData,
           username: socket.user.username, display_name: socket.user.display_name,
           avatar_url: socket.user.avatar_url, is_edited: 0, is_deleted: 0,
-          created_at: now,           reactions: [], readBy: []
+          created_at: now, reactions: [], readBy: []
         };
 
-        const { error: insertError } = await sb.from('messages').insert([{
-          id: msgId, conversation_id: conversationId, sender_id: socket.user.id,
-          content: encryptedContent, type: finalType, reply_to: replyTo || null, created_at: now,
-          media_url: mediaUrl || null, media_type: mediaType || null, mime_type: mimeType || null,
-          file_name: fileName || null, file_size: fileSize || null, duration: duration || null
-        }]);
+        const [insertResult, membersResult] = await Promise.all([
+          sb.from('messages').insert([{
+            id: msgId, conversation_id: conversationId, sender_id: socket.user.id,
+            content: encryptedContent, type: finalType, reply_to: replyTo || null, created_at: now,
+            media_url: mediaUrl || null, media_type: mediaType || null, mime_type: mimeType || null,
+            file_name: fileName || null, file_size: fileSize || null, duration: duration || null
+          }]),
+          sb.from('conversation_members').select('user_id').eq('conversation_id', conversationId).neq('user_id', socket.user.id)
+        ]);
 
-        if (insertError) {
-          console.error('[MSG] Insert FAILED:', insertError.message);
+        if (insertResult.error) {
+          console.error('[MSG] Insert FAILED:', insertResult.error.message);
           socket.emit('message:error', { error: 'Failed to save', tempId: msgId });
           return;
         }
 
-        io.to('conv:' + conversationId).emit('message:new', message);
+        socket.to('conv:' + conversationId).emit('message:new', message);
 
-        const { data: members } = await sb.from('conversation_members')
-          .select('user_id').eq('conversation_id', conversationId).neq('user_id', socket.user.id);
-        (members || []).forEach(m => {
+        (membersResult.data || []).forEach(m => {
           const memberOnline = onlineUsers.get(m.user_id);
           if (memberOnline) {
             io.to(memberOnline.socketId).emit('message:new', message);
