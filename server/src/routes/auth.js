@@ -16,6 +16,18 @@ function generateTokens(userId) {
   return { token, refreshToken };
 }
 
+function parseDevice(ua) {
+  if (!ua) return 'Unknown Device';
+  if (/android/i.test(ua)) return 'Android';
+  if (/iphone|ipad|ipod/i.test(ua)) return /ipad/i.test(ua) ? 'iPad' : 'iPhone';
+  if (/windows/i.test(ua)) return 'Windows PC';
+  if (/macintosh|mac os/i.test(ua)) return 'Mac';
+  if (/linux/i.test(ua)) return 'Linux';
+  if (/chrome/i.test(ua)) return 'Chrome Browser';
+  if (/firefox/i.test(ua)) return 'Firefox Browser';
+  return 'Unknown Device';
+}
+
 router.post('/register', authLimiter, async (req, res) => {
   try {
     const { username, email, password, displayName } = req.body;
@@ -29,29 +41,18 @@ router.post('/register', authLimiter, async (req, res) => {
     
     const userId = uuidv4();
     const passwordHash = await hashPassword(password);
-    
+    const ip = req.ip || req.connection?.remoteAddress || '';
+    const device = parseDevice(req.get('User-Agent'));
+
     await sb.from('users').insert([{
       id: userId, username, email: email || '', password_hash: passwordHash,
-      display_name: sanitize(displayName || username), is_approved: 1
+      display_name: sanitize(displayName || username), is_approved: 0,
+      ip_address: ip, device_info: device, last_ip: ip, last_device: device
     }]);
-    
-    const { token, refreshToken } = generateTokens(userId);
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
-    
-    await sb.from('sessions').insert([{
-      id: uuidv4(), user_id: userId, token, refresh_token: refreshToken,
-      ip_address: req.ip, user_agent: req.get('User-Agent'), expires_at: expiresAt
-    }]);
-    
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true, secure: config.nodeEnv === 'production',
-      sameSite: 'strict', maxAge: 7 * 24 * 60 * 60 * 1000
-    });
     
     res.status(201).json({
-      message: 'Registration successful',
-      token,
-      user: { id: userId, username, displayName: sanitize(displayName), avatarUrl: '' }
+      message: 'Registration successful. Please wait for admin approval.',
+      pending: true
     });
   } catch (err) {
     console.error('[AUTH] Register error:', err);
@@ -72,17 +73,23 @@ router.post('/login', authLimiter, async (req, res) => {
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const valid = await verifyPassword(password, user.password_hash);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
-    if (!user.is_approved) return res.status(403).json({ error: 'Account pending approval' });
+    if (!user.is_approved) return res.status(403).json({ error: 'Account pending admin approval. Please wait.' });
     
+    const ip = req.ip || req.connection?.remoteAddress || '';
+    const device = parseDevice(req.get('User-Agent'));
+
     const { token, refreshToken } = generateTokens(user.id);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     
     await sb.from('sessions').insert([{
       id: uuidv4(), user_id: user.id, token, refresh_token: refreshToken,
-      ip_address: req.ip, user_agent: req.get('User-Agent'), expires_at: expiresAt
+      ip_address: ip, user_agent: req.get('User-Agent'), expires_at: expiresAt
     }]);
     
-    await sb.from('users').update({ status: 'online', last_seen: new Date().toISOString() }).eq('id', user.id);
+    await sb.from('users').update({
+      status: 'online', last_seen: new Date().toISOString(),
+      last_ip: ip, last_device: device
+    }).eq('id', user.id);
     
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true, secure: config.nodeEnv === 'production',
@@ -151,27 +158,6 @@ router.get('/me', authGuard, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch user' });
-  }
-});
-
-router.post('/setup', async (req, res) => {
-  try {
-    const sb = getSupabase();
-    const { data: existing } = await sb.from('admins').select('id').limit(1);
-    if (existing && existing.length > 0) return res.status(400).json({ error: 'Admin already exists' });
-
-    const adminId = uuidv4();
-    const passwordHash = await hashPassword('P@ipet2026');
-
-    await sb.from('admins').insert([{
-      id: adminId, username: 'oktagram', password_hash: passwordHash,
-      display_name: 'Oktagram Admin', totp_enabled: 0
-    }]);
-
-    res.json({ message: 'Admin created', username: 'oktagram', password: 'P@ipet2026' });
-  } catch (err) {
-    console.error('[AUTH] Setup error:', err);
-    res.status(500).json({ error: 'Setup failed' });
   }
 });
 

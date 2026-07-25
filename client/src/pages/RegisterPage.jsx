@@ -59,6 +59,8 @@ export default function RegisterPage() {
     mouseY.set(e.clientY - rect.top - rect.height / 2)
   }
 
+  const [pending, setPending] = useState(false)
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (username.length < 3) { toast.error('Username must be 3+ characters'); return }
@@ -66,8 +68,7 @@ export default function RegisterPage() {
     setLoading(true)
     try {
       await register(username, email, password)
-      toast.success('Welcome to NYXORA!')
-      navigate('/chat')
+      setPending(true)
     } catch (err) {
       setShake(true)
       setTimeout(() => setShake(false), 500)
@@ -101,6 +102,19 @@ export default function RegisterPage() {
           transition={{ duration: 0.6 }}
           className="glass-strong rounded-3xl p-8 space-y-6"
         >
+          {pending ? (
+            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="text-center space-y-4 py-6">
+              <div className="w-16 h-16 rounded-full bg-neon-yellow/20 flex items-center justify-center mx-auto">
+                <svg className="w-8 h-8 text-neon-yellow" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <h2 className="font-display text-xl font-bold text-neon-yellow">Pending Approval</h2>
+              <p className="text-sm text-gray-400">Your account has been created. Please wait for the admin to approve your account before you can login.</p>
+              <Link to="/login" className="inline-block btn-secondary text-sm mt-2">Back to Login</Link>
+            </motion.div>
+          ) : (
+          <>
           <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="text-center space-y-2">
             <h1 className="font-display text-4xl font-bold gradient-text">Join NYXORA</h1>
             <p className="text-gray-400 text-sm">Create your encrypted identity</p>
@@ -127,11 +141,15 @@ export default function RegisterPage() {
               </button>
             </motion.div>
           </form>
+          </>
+          )}
 
+          {!pending && (
           <p className="text-center text-sm text-gray-400">
             Already have an account?{' '}
             <Link to="/login" className="text-nyx-400 hover:text-nyx-300 font-medium transition-colors">Sign In</Link>
           </p>
+          )}
         </motion.div>
       </motion.div>
     </div>

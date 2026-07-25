@@ -38,6 +38,7 @@ export const useAuthStore = create((set, get) => ({
     set({ error: null })
     try {
       const { data } = await api.post('/auth/register', { username, email, password })
+      if (data.pending) return { pending: true }
       localStorage.setItem('nyx_access_token', data.accessToken)
       set({ user: data.user })
       updateSocketToken()
