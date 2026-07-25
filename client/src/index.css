@@ -20,6 +20,68 @@
   body {
     overflow: hidden;
   }
+  select, select option {
+    background-color: #1a0536 !important;
+    color: #ffffff !important;
+    border-color: rgba(255,255,255,0.1) !important;
+  }
+  select option {
+    background-color: #1a0536 !important;
+    color: #e2e8f0 !important;
+    padding: 8px 12px;
+  }
+  select option:hover, select option:focus, select option:active, select option:checked {
+    background-color: #7c3aed !important;
+    color: #ffffff !important;
+  }
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"] {
+    color-scheme: dark;
+  }
+  input[type="color"] {
+    -webkit-appearance: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+  input[type="color"]::-webkit-color-swatch-wrapper {
+    padding: 2px;
+  }
+  input[type="color"]::-webkit-color-swatch {
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px;
+  }
+  table {
+    color-scheme: dark;
+  }
+  thead th {
+    background-color: rgba(255,255,255,0.05) !important;
+    color: #e2e8f0 !important;
+  }
+  tbody td {
+    background-color: transparent !important;
+    color: #cbd5e1 !important;
+    border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+  }
+  tbody tr:hover td {
+    background-color: rgba(255,255,255,0.03) !important;
+  }
+  [role="listbox"] {
+    background-color: #1a0536 !important;
+    border: 1px solid rgba(255,255,255,0.1) !important;
+    color: #ffffff !important;
+  }
+  [role="option"] {
+    color: #e2e8f0 !important;
+  }
+  [role="option"]:hover, [role="option"][aria-selected="true"] {
+    background-color: rgba(124,58,237,0.3) !important;
+    color: #ffffff !important;
+  }
+  details summary::-webkit-details-marker {
+    display: none;
+  }
 }
 
 @layer components {

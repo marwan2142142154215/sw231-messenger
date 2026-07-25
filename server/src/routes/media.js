@@ -29,7 +29,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({
   storage,
-  limits: { fileSize: 100 * 1024 * 1024 },
+  limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (/\.(exe|bat|cmd|sh|ps1|vbs|jar|msi|dll|scr|com|pif)$/i.test(file.originalname))
       return cb(new Error('File type not allowed'));
