@@ -9,9 +9,10 @@ const router = express.Router();
 router.get('/:conversationId', authGuard, async (req, res) => {
   try {
     const sb = getSupabase();
-    const { data: isMember } = await sb.from('conversation_members')
+    const { data: isMember, error: memberErr } = await sb.from('conversation_members')
       .select('conversation_id').eq('conversation_id', req.params.conversationId).eq('user_id', req.user.id).single();
-    if (!isMember) return res.status(403).json({ error: 'Not a member' });
+    if (memberErr) console.error('[MSG-API] Member check error:', memberErr.message);
+    if (!isMember) { console.log(`[MSG-API] ${req.user.username} NOT member of ${req.params.conversationId}`); return res.status(403).json({ error: 'Not a member' }); }
     
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
     const cursor = req.query.cursor;

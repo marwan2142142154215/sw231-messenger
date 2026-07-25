@@ -79,13 +79,15 @@ function initSocket(io) {
       if (!checkRateLimit(socket.id, 'message:send')) return;
       try {
         const { conversationId, content, type, replyTo, mediaUrl, mediaType, mimeType, fileName, fileSize, duration, tempId } = data;
-        if (!conversationId || (!content && !mediaUrl)) return;
+        console.log(`[MSG] ${socket.user.username} → conv:${conversationId} content="${(content||'').substring(0,50)}" tempId=${tempId}`);
+        if (!conversationId || (!content && !mediaUrl)) { console.log('[MSG] Rejected: no conversationId or content'); return; }
         if (content && content.trim().length === 0 && !mediaUrl) return;
 
         const sb = getSupabase();
-        const { data: isMember } = await sb.from('conversation_members')
+        const { data: isMember, error: memberErr } = await sb.from('conversation_members')
           .select('conversation_id').eq('conversation_id', conversationId).eq('user_id', socket.user.id).single();
-        if (!isMember) return;
+        if (memberErr) { console.error('[MSG] Member check error:', memberErr.message); socket.emit('message:error', { error: 'Member check failed: ' + memberErr.message, tempId }); return; }
+        if (!isMember) { console.error(`[MSG] ${socket.user.username} is NOT member of ${conversationId}`); socket.emit('message:error', { error: 'Not a member of this conversation', tempId }); return; }
 
         const key = generateConversationKey(conversationId);
         let msgContent = content ? content.trim() : (mediaType === 'voice' ? '🎤 Voice' : mediaType === 'video' ? '🎥 Video' : mediaType === 'audio' ? '🎵 Audio' : mediaType === 'sticker' ? (content || '😀') : '📎 File');
@@ -123,11 +125,12 @@ function initSocket(io) {
         }]);
 
         if (insertError) {
-          console.error('[SOCKET] Message insert failed:', insertError.message);
-          socket.emit('message:error', { error: 'Failed to save message', tempId: msgId });
+          console.error('[MSG] Insert FAILED:', insertError.message);
+          socket.emit('message:error', { error: 'Failed to save message: ' + insertError.message, tempId: msgId });
           return;
         }
 
+        console.log(`[MSG] Saved msg ${msgId} → emitting to room conv:${conversationId}`);
         io.to('conv:' + conversationId).emit('message:new', message);
 
         const { data: members } = await sb.from('conversation_members')

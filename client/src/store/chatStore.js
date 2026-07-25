@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import api from '../services/api'
 import { v4 as uuidv4 } from 'uuid'
+import toast from 'react-hot-toast'
 
 export const useChatStore = create((set, get) => ({
   conversations: [],
@@ -13,8 +14,11 @@ export const useChatStore = create((set, get) => ({
   loadConversations: async () => {
     try {
       const { data } = await api.get('/conversations')
+      console.log('[CHAT] Loaded conversations:', (data.conversations || []).length)
       set({ conversations: data.conversations || [] })
-    } catch {}
+    } catch (err) {
+      console.error('[CHAT] Failed to load conversations:', err.response?.data || err.message)
+    }
   },
 
   loadFriends: async () => {
@@ -39,7 +43,10 @@ export const useChatStore = create((set, get) => ({
       try {
         const { data } = await api.get(`/messages/${conversation.id}`)
         set({ messages: data.messages || [] })
-      } catch {}
+      } catch (err) {
+        console.error('[CHAT] Failed to load messages:', err.response?.data || err.message)
+        toast.error('Failed to load messages: ' + (err.response?.data?.error || err.message))
+      }
     }
   },
 
