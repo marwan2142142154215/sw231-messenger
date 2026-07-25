@@ -78,7 +78,7 @@ function initSocket(io) {
     socket.on('message:send', async (data) => {
       if (!checkRateLimit(socket.id, 'message:send')) return;
       try {
-        const { conversationId, content, type, replyTo, mediaUrl, mediaType, mimeType, fileName, fileSize, duration } = data;
+        const { conversationId, content, type, replyTo, mediaUrl, mediaType, mimeType, fileName, fileSize, duration, tempId } = data;
         if (!conversationId || (!content && !mediaUrl)) return;
         if (content && content.trim().length === 0 && !mediaUrl) return;
 
@@ -90,7 +90,7 @@ function initSocket(io) {
         const key = generateConversationKey(conversationId);
         let msgContent = content ? content.trim() : (mediaType === 'voice' ? '🎤 Voice' : mediaType === 'video' ? '🎥 Video' : mediaType === 'audio' ? '🎵 Audio' : mediaType === 'sticker' ? (content || '😀') : '📎 File');
         const encryptedContent = encryptMessage(msgContent, key);
-        const msgId = uuidv4();
+        const msgId = tempId || uuidv4();
         const now = new Date().toISOString();
         let finalType = type || 'text';
         if (mediaUrl) finalType = mediaType || 'image';
@@ -124,7 +124,7 @@ function initSocket(io) {
 
         if (insertError) {
           console.error('[SOCKET] Message insert failed:', insertError.message);
-          socket.emit('message:error', { error: 'Failed to save message' });
+          socket.emit('message:error', { error: 'Failed to save message', tempId: msgId });
           return;
         }
 

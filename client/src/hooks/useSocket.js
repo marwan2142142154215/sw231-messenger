@@ -12,6 +12,7 @@ export function useSocket() {
   const addMessage = useChatStore(s => s.addMessage)
   const updateMessage = useChatStore(s => s.updateMessage)
   const removeMessage = useChatStore(s => s.removeMessage)
+  const markMessageFailed = useChatStore(s => s.markMessageFailed)
   const setOnlineUsers = useChatStore(s => s.setOnlineUsers)
   const setTyping = useChatStore(s => s.setTyping)
   const activeConversation = useChatStore(s => s.activeConversation)
@@ -36,6 +37,10 @@ export function useSocket() {
       }
     })
 
+    socket.on('message:error', ({ error, tempId }) => {
+      if (tempId) markMessageFailed(tempId)
+    })
+
     socket.on('message:edited', ({ messageId, content }) => {
       updateMessage(messageId, { content, is_edited: 1 })
     })
@@ -57,9 +62,7 @@ export function useSocket() {
       updateMessage(messageId, { reactions })
     })
 
-    socket.on('user:status', ({ userId, status }) => {
-      // handled by online users list if needed
-    })
+    socket.on('user:status', ({ userId, status }) => {})
 
     socket.on('typing:start', ({ userId, conversationId }) => {
       setTyping(conversationId, userId, true)
@@ -71,6 +74,7 @@ export function useSocket() {
 
     return () => {
       socket.off('message:new')
+      socket.off('message:error')
       socket.off('message:edited')
       socket.off('message:deleted')
       socket.off('message:reaction')
@@ -78,7 +82,7 @@ export function useSocket() {
       socket.off('typing:start')
       socket.off('typing:stop')
     }
-  }, [user, addMessage, updateMessage, removeMessage, setOnlineUsers, setTyping, activeConversation, navigate])
+  }, [user, addMessage, updateMessage, removeMessage, markMessageFailed, setOnlineUsers, setTyping, activeConversation, navigate])
 
   const emit = useCallback((event, data) => {
     if (socketRef.current?.connected) {

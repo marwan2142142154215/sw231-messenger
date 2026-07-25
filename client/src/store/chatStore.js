@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import api from '../services/api'
+import { v4 as uuidv4 } from 'uuid'
 
 export const useChatStore = create((set, get) => ({
   conversations: [],
@@ -42,19 +43,65 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
+  sendMessage: (conversationId, content, replyTo, user, emit) => {
+    const tempId = uuidv4()
+    const now = new Date().toISOString()
+    const optimisticMsg = {
+      id: tempId, conversation_id: conversationId, sender_id: user.id,
+      content, type: 'text', reply_to: replyTo?.id || null,
+      username: user.username, display_name: user.display_name,
+      avatar_url: user.avatar_url, is_edited: 0, is_deleted: 0,
+      created_at: now, reactions: [], replyTo: replyTo || null,
+      _sending: true
+    }
+    const { messages, conversations } = get()
+    set({
+      messages: [...messages, optimisticMsg],
+      conversations: conversations.map(c =>
+        c.id === conversationId
+          ? { ...c, lastMessage: content, lastMessageTime: now }
+          : c
+      )
+    })
+    emit('message:send', { conversationId, content, replyTo: replyTo?.id || null, tempId })
+    return tempId
+  },
+
   addMessage: (message) => {
     const { messages, conversations } = get()
     const exists = messages.find(m => m.id === message.id)
-    if (!exists) {
-      set({ messages: [...messages, message] })
+    if (exists) {
+      if (exists._sending) {
+        set({ messages: messages.map(m => m.id === message.id ? { ...message, _sending: false, _failed: false } : m) })
+      }
+      return
     }
     set({
+      messages: [...messages, message],
       conversations: conversations.map(c =>
         c.id === message.conversation_id
           ? { ...c, lastMessage: message.content, lastMessageTime: message.created_at }
           : c
       )
     })
+  },
+
+  markMessageFailed: (tempId) => {
+    const { messages } = get()
+    set({ messages: messages.map(m => m.id === tempId ? { ...m, _sending: false, _failed: true } : m) })
+  },
+
+  retryMessage: (tempId, conversationId, content, replyTo, user, emit) => {
+    const { messages } = get()
+    const msg = messages.find(m => m.id === tempId)
+    if (!msg) return
+    const newTempId = uuidv4()
+    set({
+      messages: messages.filter(m => m.id !== tempId).concat([{
+        ...msg, id: newTempId, _sending: true, _failed: false, created_at: new Date().toISOString()
+      }]).sort((a, b) => a.created_at < b.created_at ? -1 : 1)
+    })
+    emit('message:send', { conversationId, content, replyTo: replyTo?.id || null, tempId: newTempId })
   },
 
   updateMessage: (messageId, updates) => {

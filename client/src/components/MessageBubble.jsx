@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { format } from 'date-fns'
 import { useState } from 'react'
 import { useSocket } from '../hooks/useSocket'
+import { useChatStore } from '../store/chatStore'
 
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '😡']
 
@@ -9,6 +10,7 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit }) {
   const [showReactions, setShowReactions] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const { emit } = useSocket()
+  const retryMessage = useChatStore(s => s.retryMessage)
 
   const handleReact = (emoji) => {
     emit('message:react', { messageId: message.id, emoji, conversationId: message.conversation_id })
@@ -18,6 +20,10 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit }) {
   const handleDelete = () => {
     emit('message:delete', { messageId: message.id, conversationId: message.conversation_id, forEveryone: true })
     setShowMenu(false)
+  }
+
+  const handleRetry = () => {
+    retryMessage(message.id, message.conversation_id, message.content, message.replyTo, { id: message.sender_id, username: message.username, display_name: message.display_name, avatar_url: message.avatar_url }, emit)
   }
 
   const groupedReactions = (message.reactions || []).reduce((acc, r) => {
@@ -45,9 +51,20 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit }) {
         >
           {message.is_edited === 1 && <span className="text-xs text-gray-500 italic">edited </span>}
           <p className="text-sm leading-relaxed break-words">{message.content}</p>
-          <p className={`text-[10px] mt-1 ${isOwn ? 'text-white/50' : 'text-gray-500'}`}>
-            {format(new Date(message.created_at), 'HH:mm')}
-          </p>
+          <div className={`flex items-center gap-1.5 mt-1 ${isOwn ? 'justify-end' : ''}`}>
+            {message._sending && (
+              <svg className="w-3 h-3 text-white/40 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-20" />
+                <path d="M12 2a10 10 0 019.5 7" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+              </svg>
+            )}
+            {message._failed && (
+              <button onClick={handleRetry} title="Retry" className="text-red-400 hover:text-red-300 text-xs">⚠ Retry</button>
+            )}
+            <p className={`text-[10px] ${isOwn ? 'text-white/50' : 'text-gray-500'}`}>
+              {format(new Date(message.created_at), 'HH:mm')}
+            </p>
+          </div>
         </div>
 
         {groupedReactions.length > 0 && (

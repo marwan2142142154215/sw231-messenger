@@ -15,6 +15,7 @@ export default function ChatArea() {
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
   const { emit } = useSocket()
+  const sendMessage = useChatStore(s => s.sendMessage)
   const user = useAuthStore(s => s.user)
   const typingTimeout = useRef(null)
 
@@ -43,11 +44,7 @@ export default function ChatArea() {
       emit('message:edit', { messageId: editingMsg.id, content: input, conversationId: activeConversation.id })
       setEditingMsg(null)
     } else {
-      emit('message:send', {
-        conversationId: activeConversation.id,
-        content: input,
-        replyTo: replyTo?.id || null
-      })
+      sendMessage(activeConversation.id, input, replyTo, user, emit)
       setReplyTo(null)
     }
     setInput('')
