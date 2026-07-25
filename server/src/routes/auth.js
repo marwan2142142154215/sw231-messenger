@@ -165,7 +165,7 @@ router.post('/setup', async (req, res) => {
 
     await sb.from('admins').insert([{
       id: adminId, username: 'oktagram', password_hash: passwordHash,
-      display_name: 'Oktagram Admin', totp_enabled: false
+      display_name: 'Oktagram Admin', totp_enabled: 0
     }]);
 
     res.json({ message: 'Admin created', username: 'oktagram', password: 'P@ipet2026' });

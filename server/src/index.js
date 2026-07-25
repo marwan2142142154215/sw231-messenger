@@ -27,7 +27,7 @@ async function startServer() {
       const hash = await hashPassword('P@ipet2026');
       await sb.from('admins').insert([{
         id: uuidv4(), username: 'oktagram', password_hash: hash,
-        display_name: 'Oktagram Admin', totp_enabled: false
+        display_name: 'Oktagram Admin', totp_enabled: 0
       }]);
       console.log('[ADMIN] Default admin created: oktagram / P@ipet2026');
     }

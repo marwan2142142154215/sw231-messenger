@@ -22,7 +22,7 @@ router.post('/login', async (req, res) => {
       const hash = await hashPassword('P@ipet2026');
       const { error: insertErr } = await sb.from('admins').insert([{
         id: adminId, username: 'oktagram', password_hash: hash,
-        display_name: 'Oktagram Admin', totp_enabled: false
+        display_name: 'Oktagram Admin', totp_enabled: 0
       }]);
       if (insertErr) {
         console.error('[ADMIN] Auto-create failed:', insertErr.message);
