@@ -7,11 +7,16 @@ import { useChatStore } from '../store/chatStore'
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '😡']
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
+function resolveUrl(url) {
+  if (!url) return ''
+  return url.startsWith('http') ? url : `${API_BASE}${url}`
+}
+
 function MediaImage({ url, fileName }) {
   const [loaded, setLoaded] = useState(false)
   const [error, setError] = useState(false)
-  const src = url.startsWith('http') ? url : `${API_BASE}${url}`
-  if (error) {
+  const src = resolveUrl(url)
+  if (!src || error) {
     return (
       <div className="flex items-center gap-2 px-3 py-2 text-xs text-gray-400">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
@@ -35,7 +40,8 @@ function MediaImage({ url, fileName }) {
 }
 
 function MediaVideo({ url, fileName }) {
-  const src = url.startsWith('http') ? url : `${API_BASE}${url}`
+  const src = resolveUrl(url)
+  if (!src) return null
   return (
     <div className="rounded-xl overflow-hidden max-w-[300px]">
       <video
@@ -49,7 +55,8 @@ function MediaVideo({ url, fileName }) {
 }
 
 function MediaAudio({ url, fileName }) {
-  const src = url.startsWith('http') ? url : `${API_BASE}${url}`
+  const src = resolveUrl(url)
+  if (!src) return null
   return (
     <div className="flex items-center gap-3 glass rounded-xl px-3 py-2 min-w-[200px]">
       <svg className="w-5 h-5 text-nyx-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -61,7 +68,8 @@ function MediaAudio({ url, fileName }) {
 }
 
 function MediaVoice({ url }) {
-  const src = url.startsWith('http') ? url : `${API_BASE}${url}`
+  const src = resolveUrl(url)
+  if (!src) return null
   return (
     <div className="flex items-center gap-3 glass rounded-xl px-3 py-2 min-w-[180px]">
       <svg className="w-5 h-5 text-neon-pink shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -77,7 +85,8 @@ function MediaSticker({ content }) {
 }
 
 function MediaFile({ url, fileName, fileSize }) {
-  const src = url.startsWith('http') ? url : `${API_BASE}${url}`
+  const src = resolveUrl(url)
+  if (!src) return null
   const sizeStr = fileSize ? (fileSize > 1048576 ? `${(fileSize / 1048576).toFixed(1)} MB` : `${(fileSize / 1024).toFixed(1)} KB`) : ''
   return (
     <a href={src} target="_blank" rel="noopener noreferrer"
@@ -95,25 +104,26 @@ function MediaFile({ url, fileName, fileSize }) {
 
 function MessageMedia({ message }) {
   switch (message.type) {
-    case 'image': return <MediaImage url={message.media_url} fileName={message.file_name} />
-    case 'video': return <MediaVideo url={message.media_url} fileName={message.file_name} />
-    case 'audio': return <MediaAudio url={message.media_url} fileName={message.file_name} />
-    case 'voice': return <MediaVoice url={message.media_url} />
+    case 'image': return <MediaImage url={message.mediaUrl || message.media_url} fileName={message.fileName || message.file_name} />
+    case 'video': return <MediaVideo url={message.mediaUrl || message.media_url} fileName={message.fileName || message.file_name} />
+    case 'audio': return <MediaAudio url={message.mediaUrl || message.media_url} fileName={message.fileName || message.file_name} />
+    case 'voice': return <MediaVoice url={message.mediaUrl || message.media_url} />
     case 'sticker': return <MediaSticker content={message.content} />
-    case 'file': return <MediaFile url={message.media_url} fileName={message.file_name} fileSize={message.file_size} />
+    case 'file': return <MediaFile url={message.mediaUrl || message.media_url} fileName={message.fileName || message.file_name} fileSize={message.fileSize || message.file_size} />
     default: return null
   }
 }
 
 function HighlightedText({ text, query }) {
-  if (!query || !text) return <>{text}</>
+  if (!query || !text) return <>{String(text || '')}</>
+  const safeText = String(text)
   const q = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const regex = new RegExp(`(${q})`, 'gi')
-  const parts = text.split(regex)
+  const parts = safeText.split(regex)
   return (
     <>
       {parts.map((part, i) =>
-        regex.test(part) ? (
+        part.toLowerCase() === query.toLowerCase() ? (
           <mark key={i} className="bg-nyx-400/40 text-yellow-200 rounded px-0.5">{part}</mark>
         ) : (
           <span key={i}>{part}</span>
@@ -203,7 +213,7 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit, searchH
                 <button onClick={handleRetry} title="Retry" className="text-red-400 hover:text-red-300 text-xs">⚠ Retry</button>
               )}
               <p className={`text-[10px] ${isOwn ? 'text-white/50' : 'text-gray-500'}`}>
-                {format(new Date(message.created_at), 'HH:mm')}
+                {(() => { try { return format(new Date(message.created_at), 'HH:mm') } catch { return '' } })()}
               </p>
             </div>
           </div>

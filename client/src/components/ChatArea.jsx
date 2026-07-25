@@ -221,12 +221,14 @@ export default function ChatArea() {
   }
 
   const handlePaste = async (e) => {
+    if (!activeConversation) return
     const items = e.clipboardData?.items
     if (!items) return
     for (const item of items) {
       if (item.type.startsWith('image/')) {
         e.preventDefault()
         const blob = item.getAsFile()
+        if (!blob) return
         const ext = blob.type.split('/')[1] || 'png'
         const file = new File([blob], `paste-${Date.now()}.${ext}`, { type: blob.type })
         setUploading(true)
@@ -234,8 +236,10 @@ export default function ChatArea() {
           const formData = new FormData()
           formData.append('file', file)
           const { data } = await api.post('/media/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
-          if (data) sendMediaMessage(data, 'image')
-        } catch {}
+          if (data && activeConversation) sendMediaMessage(data, 'image')
+        } catch (err) {
+          console.error('[PASTE] Upload failed:', err)
+        }
         setUploading(false)
         return
       }
