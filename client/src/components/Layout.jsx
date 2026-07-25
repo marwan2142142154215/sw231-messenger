@@ -54,54 +54,121 @@ export default function Layout() {
 
   return (
     <div className="h-screen w-screen flex overflow-hidden" style={bgStyle}>
-      <motion.aside
-        initial={{ x: -280 }}
-        animate={{ x: sidebarOpen ? 0 : -280 }}
-        className="w-72 h-full flex flex-col z-20 shrink-0"
-        style={{ backgroundColor: theme.sidebarBg, backdropFilter: 'blur(20px)', borderRight: '1px solid rgba(255,255,255,0.08)' }}
-      >
-        <div className="p-4 border-b border-white/10">
-          <h1 className="font-display text-2xl font-bold gradient-text">NYXORA</h1>
-          <p className="text-xs mt-1" style={{ color: theme.textSecondary }}>Welcome, {user?.username}</p>
-        </div>
+      <div className="hidden md:block">
+        <motion.aside
+          initial={{ x: -280 }}
+          animate={{ x: sidebarOpen ? 0 : -280 }}
+          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+          className="w-72 h-full flex flex-col z-20 shrink-0"
+          style={{ backgroundColor: theme.sidebarBg, backdropFilter: 'blur(20px)', borderRight: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          <div className="p-4 border-b border-white/10">
+            <h1 className="font-display text-2xl font-bold gradient-text tracking-tight">NYXORA</h1>
+            <p className="text-xs mt-1" style={{ color: theme.textSecondary }}>Welcome, {user?.username}</p>
+          </div>
 
-        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
-          {navItems.map(item => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                  isActive
-                    ? 'text-white'
-                    : 'hover:bg-white/5'
-                }`
-              }
-              style={({ isActive }) => isActive ? { backgroundColor: `${theme.accentColor}30`, color: theme.accentColor } : { color: theme.textSecondary }}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+          <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+            {navItems.map(item => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+                    isActive ? 'text-white' : 'hover:bg-white/5'
+                  }`
+                }
+                style={({ isActive }) => isActive ? { backgroundColor: `${theme.accentColor}30`, color: theme.accentColor } : { color: theme.textSecondary }}
+              >
+                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                </svg>
+                <span className="font-medium text-sm">{item.label}</span>
+              </NavLink>
+            ))}
+          </nav>
+
+          <div className="p-3 border-t border-white/10 space-y-1">
+            <button onClick={() => setShowTheme(true)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-nyx-400 hover:bg-white/5 transition-all">
+              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
               </svg>
-              <span className="font-medium">{item.label}</span>
-            </NavLink>
-          ))}
-        </nav>
+              <span className="font-medium text-sm">Theme</span>
+            </button>
+            <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-neon-pink hover:bg-neon-pink/10 transition-all">
+              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              <span className="font-medium text-sm">Logout</span>
+            </button>
+          </div>
+        </motion.aside>
+      </div>
 
-        <div className="p-3 border-t border-white/10 space-y-1">
-          <button onClick={() => setShowTheme(true)} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-nyx-400 hover:bg-white/5 transition-all">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
-            </svg>
-            <span className="font-medium text-sm">Theme</span>
-          </button>
-          <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-neon-pink hover:bg-neon-pink/10 transition-all">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            <span className="font-medium text-sm">Logout</span>
-          </button>
-        </div>
-      </motion.aside>
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-40 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {sidebarOpen && (
+          <motion.div
+            initial={{ x: -280 }}
+            animate={{ x: 0 }}
+            exit={{ x: -280 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed inset-y-0 left-0 z-50 md:hidden"
+          >
+            <div className="w-72 h-full flex flex-col" style={{ backgroundColor: theme.sidebarBg, backdropFilter: 'blur(20px)', borderRight: '1px solid rgba(255,255,255,0.08)' }}>
+              <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                <h1 className="font-display text-2xl font-bold gradient-text tracking-tight">NYXORA</h1>
+                <button onClick={() => setSidebarOpen(false)} className="text-gray-400 hover:text-white">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <p className="px-4 py-2 text-xs" style={{ color: theme.textSecondary }}>Welcome, {user?.username}</p>
+              <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
+                {navItems.map(item => (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    onClick={() => setSidebarOpen(false)}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${isActive ? 'text-white' : 'hover:bg-white/5'}`
+                    }
+                    style={({ isActive }) => isActive ? { backgroundColor: `${theme.accentColor}30`, color: theme.accentColor } : { color: theme.textSecondary }}
+                  >
+                    <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d={item.icon} />
+                    </svg>
+                    <span className="font-medium text-sm">{item.label}</span>
+                  </NavLink>
+                ))}
+              </nav>
+              <div className="p-3 border-t border-white/10 space-y-1">
+                <button onClick={() => { setShowTheme(true); setSidebarOpen(false) }} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-nyx-400 hover:bg-white/5 transition-all">
+                  <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+                  </svg>
+                  <span className="font-medium text-sm">Theme</span>
+                </button>
+                <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-gray-400 hover:text-neon-pink hover:bg-neon-pink/10 transition-all">
+                  <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  <span className="font-medium text-sm">Logout</span>
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <button onClick={() => setSidebarOpen(!sidebarOpen)} className="fixed top-4 left-4 z-30 w-10 h-10 glass rounded-xl flex items-center justify-center hover:bg-white/10 transition-all">
         <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">

@@ -123,6 +123,29 @@ async function startServer() {
 
   initSocket(io);
 
+  const WEEKLY_CLEANUP_INTERVAL = 7 * 24 * 60 * 60 * 1000;
+  async function weeklyCleanup() {
+    try {
+      const sb = getSupabase();
+      const weekAgo = new Date(Date.now() - WEEKLY_CLEANUP_INTERVAL).toISOString();
+      console.log(`[CLEANUP] Running weekly cleanup, deleting data older than ${weekAgo}`);
+      const tables = ['messages', 'read_receipts', 'reactions', 'firewall_logs', 'admin_logs', 'story_views', 'sessions', 'admin_sessions', 'qr_tokens'];
+      for (const t of tables) {
+        const { error } = await sb.from(t).delete().lt('created_at', weekAgo);
+        if (error) console.warn(`[CLEANUP] ${t}: ${error.message}`);
+        else console.log(`[CLEANUP] ${t}: deleted old records`);
+      }
+      const { error: storiesErr } = await sb.from('stories').delete().lt('expires_at', new Date().toISOString());
+      if (storiesErr) console.warn(`[CLEANUP] stories: ${storiesErr.message}`);
+      else console.log('[CLEANUP] stories: deleted expired');
+      console.log('[CLEANUP] Weekly cleanup done');
+    } catch (e) {
+      console.error('[CLEANUP] Error:', e.message);
+    }
+  }
+  setInterval(weeklyCleanup, WEEKLY_CLEANUP_INTERVAL);
+  setTimeout(weeklyCleanup, 30000);
+
   const PORT = config.port;
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`[NYXORA] Server running on port ${PORT}`);
