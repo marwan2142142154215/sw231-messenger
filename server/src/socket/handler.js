@@ -131,7 +131,7 @@ function initSocket(io) {
           duration: duration || null, reply_to: replyTo || null, replyTo: replyToData,
           username: socket.user.username, display_name: socket.user.display_name,
           avatar_url: socket.user.avatar_url, is_edited: 0, is_deleted: 0,
-          created_at: now, reactions: []
+          created_at: now,           reactions: [], readBy: []
         };
 
         const { error: insertError } = await sb.from('messages').insert([{
@@ -229,10 +229,29 @@ function initSocket(io) {
       socket.to('conv:' + conversationId).emit('typing:stop', { userId: socket.user.id, conversationId });
     });
 
-    socket.on('message:read', (data) => {
+    socket.on('message:read', async (data) => {
       if (!checkRateLimit(socket.id, 'message:read')) return;
-      const { messageId } = data;
-      if (messageId) readBatch.set(messageId + '|' + socket.user.id, 1);
+      const { messageId, conversationId } = data;
+      if (!messageId || !conversationId) return;
+      readBatch.set(messageId + '|' + socket.user.id, 1);
+
+      try {
+        const sb = getSupabase();
+        const { data: members } = await sb.from('conversation_members')
+          .select('user_id').eq('conversation_id', conversationId).neq('user_id', socket.user.id);
+        (members || []).forEach(m => {
+          const memberOnline = onlineUsers.get(m.user_id);
+          if (memberOnline) {
+            io.to(memberOnline.socketId).emit('message:read:receipt', {
+              messageId,
+              conversationId,
+              userId: socket.user.id,
+              username: socket.user.username,
+              display_name: socket.user.display_name
+            });
+          }
+        });
+      } catch {}
     });
 
     socket.on('user:search', async (query) => {

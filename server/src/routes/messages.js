@@ -43,9 +43,10 @@ router.get('/:conversationId', authGuard, async (req, res) => {
       (users || []).forEach(u => { userMap[u.id] = u; });
     }
 
-    const [reactionsResult, replyResult] = await Promise.all([
+    const [reactionsResult, replyResult, readResult] = await Promise.all([
       msgIds.length > 0 ? sb.from('reactions').select('message_id, emoji, user_id').in('message_id', msgIds) : { data: [] },
-      replyMsgIds.length > 0 ? sb.from('messages').select('id, content, sender_id, type').in('id', replyMsgIds) : { data: [] }
+      replyMsgIds.length > 0 ? sb.from('messages').select('id, content, sender_id, type').in('id', replyMsgIds) : { data: [] },
+      msgIds.length > 0 ? sb.from('read_receipts').select('message_id, user_id').in('message_id', msgIds) : { data: [] }
     ]);
 
     const reactionUserIds = [...new Set((reactionsResult.data || []).map(r => r.user_id).filter(Boolean))];
@@ -54,6 +55,20 @@ router.get('/:conversationId', authGuard, async (req, res) => {
       const { data: rUsers } = await sb.from('users').select('id, username, display_name').in('id', reactionUserIds);
       (rUsers || []).forEach(u => { reactionUserMap[u.id] = u; });
     }
+
+    const readReceiptsUserIds = [...new Set((readResult.data || []).map(r => r.user_id).filter(Boolean))];
+    let readUserMap = {};
+    if (readReceiptsUserIds.length > 0) {
+      const { data: rUsers } = await sb.from('users').select('id, username, display_name').in('id', readReceiptsUserIds);
+      (rUsers || []).forEach(u => { readUserMap[u.id] = u; });
+    }
+
+    const readByMap = {};
+    (readResult.data || []).forEach(r => {
+      if (!readByMap[r.message_id]) readByMap[r.message_id] = [];
+      const rUser = readUserMap[r.user_id] || {};
+      readByMap[r.message_id].push({ userId: r.user_id, username: rUser.username, display_name: rUser.display_name });
+    });
 
     const reactionsMap = {};
     (reactionsResult.data || []).forEach(r => {
@@ -83,6 +98,7 @@ router.get('/:conversationId', authGuard, async (req, res) => {
         username: sender.username, display_name: sender.display_name, avatar_url: sender.avatar_url,
         lastSeen: sender.last_seen,
         reactions: reactionsMap[msg.id] || [],
+        readBy: readByMap[msg.id] || [],
         replyTo: msg.reply_to ? replyToMap[msg.reply_to] || null : null
       };
     });

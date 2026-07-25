@@ -58,7 +58,7 @@ export const useChatStore = create((set, get) => ({
       content, type: 'text', reply_to: replyTo?.id || null,
       username: user.username, display_name: user.display_name,
       avatar_url: user.avatar_url, is_edited: 0, is_deleted: 0,
-      created_at: now, reactions: [], replyTo: replyTo || null,
+      created_at: now, reactions: [], readBy: [], replyTo: replyTo || null,
       _sending: true
     }
     const { messages, conversations } = get()
@@ -115,6 +115,16 @@ export const useChatStore = create((set, get) => ({
 
   updateMessage: (messageId, updates) => {
     set({ messages: get().messages.map(m => m.id === messageId ? { ...m, ...updates } : m) })
+  },
+
+  addReadReceipt: (messageId, userId, username, display_name) => {
+    const messages = get().messages.map(m => {
+      if (m.id !== messageId) return m
+      const readBy = m.readBy || []
+      if (readBy.find(r => r.userId === userId)) return m
+      return { ...m, readBy: [...readBy, { userId, username, display_name }] }
+    })
+    set({ messages })
   },
 
   removeMessage: (messageId) => {

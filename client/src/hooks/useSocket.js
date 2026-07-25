@@ -64,6 +64,12 @@ export function useSocket() {
       useChatStore.getState().updateMessage(messageId, { reactions })
     }
 
+    const onMessageReadReceipt = ({ messageId, userId, username, display_name }) => {
+      if (messageId && userId) {
+        useChatStore.getState().addReadReceipt(messageId, userId, username, display_name)
+      }
+    }
+
     const onTypingStart = ({ userId, conversationId }) => {
       if (userId && conversationId) useChatStore.getState().setTyping(conversationId, userId, true)
     }
@@ -95,6 +101,7 @@ export function useSocket() {
     socket.on('message:edited', onMessageEdited)
     socket.on('message:deleted', onMessageDeleted)
     socket.on('message:reaction', onMessageReaction)
+    socket.on('message:read:receipt', onMessageReadReceipt)
     socket.on('typing:start', onTypingStart)
     socket.on('typing:stop', onTypingStop)
     socket.on('user:status', onUserStatus)
@@ -108,6 +115,7 @@ export function useSocket() {
       socket.off('message:edited', onMessageEdited)
       socket.off('message:deleted', onMessageDeleted)
       socket.off('message:reaction', onMessageReaction)
+      socket.off('message:read:receipt', onMessageReadReceipt)
       socket.off('typing:start', onTypingStart)
       socket.off('typing:stop', onTypingStop)
       socket.off('user:status', onUserStatus)

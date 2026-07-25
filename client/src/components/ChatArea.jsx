@@ -95,6 +95,14 @@ export default function ChatArea() {
   }, [activeConversation, scrollToBottom])
 
   useEffect(() => {
+    if (!activeConversation || !user || messages.length === 0) return
+    const unreadMsgs = messages.filter(m => m.sender_id !== user.id && !(m.readBy || []).find(r => r.userId === user.id))
+    unreadMsgs.forEach(m => {
+      socketEmit('message:read', { messageId: m.id, conversationId: activeConversation.id })
+    })
+  }, [activeConversation, messages, user])
+
+  useEffect(() => {
     api.get('/media/stickers').then(r => setStickerCategories(r.data.categories || [])).catch(() => {})
   }, [])
 

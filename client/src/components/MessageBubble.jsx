@@ -148,8 +148,10 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit, searchH
   const [showReactions, setShowReactions] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const [showReactionNames, setShowReactionNames] = useState(null)
+  const [showReadBy, setShowReadBy] = useState(false)
   const retryMessage = useChatStore(s => s.retryMessage)
   const lastSeenMap = useChatStore(s => s.lastSeenMap)
+  const activeConversation = useChatStore(s => s.activeConversation)
 
   if (!message || !message.id) return null
 
@@ -180,7 +182,11 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit, searchH
   const hasText = message.type === 'text' || (message.content && message.type !== 'sticker' && message.type !== 'voice')
   const hasMedia = message.type && message.type !== 'text' && message.type !== 'sticker'
 
-  const senderLastSeen = lastSeenMap[message.sender_id]
+  const readBy = message.readBy || []
+  const hasBeenRead = readBy.length > 0
+  const isPrivateChat = activeConversation?.type !== 'group'
+  const otherMembers = (activeConversation?.members || []).filter(m => m.id !== message.sender_id)
+  const allOthersRead = isPrivateChat && otherMembers.length > 0 && otherMembers.every(m => readBy.find(r => r.userId === m.id))
 
   return (
     <motion.div
@@ -226,23 +232,49 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit, searchH
             )}
 
             <div className={`flex items-center gap-1.5 mt-1 ${isOwn ? 'justify-end' : ''}`}>
-              {message._sending && (
-                <svg className="w-3 h-3 text-white/40 animate-spin" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-20" />
-                  <path d="M12 2a10 10 0 019.5 7" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-                </svg>
-              )}
               {message._failed && (
-                <button onClick={handleRetry} title="Retry" className="text-red-400 hover:text-red-300 text-xs">⚠ Retry</button>
+                <button onClick={handleRetry} title="Retry" className="text-red-400 hover:text-red-300 text-xs flex items-center gap-1">
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                </button>
               )}
               <p className={`text-[10px] ${isOwn ? 'text-white/50' : 'text-gray-500'}`}>
                 {(() => { try { return format(new Date(message.created_at), 'HH:mm') } catch { return '' } })()}
               </p>
+              {isOwn && (
+                <div className="relative">
+                  <button
+                    onClick={() => { if (hasBeenRead) setShowReadBy(!showReadBy) }}
+                    className="flex items-center"
+                    title={hasBeenRead ? `Read by ${readBy.map(r => r.display_name || r.username).join(', ')}` : 'Sent'}
+                  >
+                    {hasBeenRead ? (
+                      <svg className={`w-4 h-4 ${allOthersRead ? 'text-blue-400' : 'text-blue-300'}`} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M1.5 8.5l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M5.5 8.5l3 3 7-7" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    ) : (
+                      <svg className="w-3.5 h-3.5 text-white/40" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+                        <path d="M2 8.5l3.5 3.5 8.5-8.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    )}
+                  </button>
+                  {showReadBy && hasBeenRead && (
+                    <div className="absolute bottom-5 right-0 glass-strong rounded-lg px-2.5 py-1.5 text-[10px] text-gray-300 whitespace-nowrap z-30 min-w-[120px] shadow-lg">
+                      <p className="font-medium text-white mb-0.5">Seen by</p>
+                      {readBy.map((r, i) => (
+                        <p key={i} className="text-gray-400">{r.display_name || r.username}</p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {!isOwn && !isSticker && message.type !== 'voice' && (
                 <div className="group/seen relative">
                   <svg className="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
                   <div className="absolute bottom-5 right-0 hidden group-hover/seen:block glass-strong rounded-lg px-2 py-1 text-[10px] text-gray-300 whitespace-nowrap z-30">
-                    {formatLastSeen(senderLastSeen)}
+                    {formatLastSeen(lastSeenMap[message.sender_id])}
                   </div>
                 </div>
               )}
