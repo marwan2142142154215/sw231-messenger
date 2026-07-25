@@ -44,6 +44,7 @@ async function startServer() {
   const marketplaceRoutes = require('./routes/marketplace');
   const mediaRoutes = require('./routes/media');
   const adminRoutes = require('./routes/admin');
+  const gifRoutes = require('./routes/gifs');
 
   const app = express();
   const server = http.createServer(app);
@@ -84,6 +85,7 @@ async function startServer() {
   app.use('/api/marketplace', marketplaceRoutes);
   app.use('/api/media', mediaRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/api/media', gifRoutes);
 
   app.get('/health', (req, res) => res.json({ status: 'ok', version: '2.0-fkfix', timestamp: new Date().toISOString() }));
 

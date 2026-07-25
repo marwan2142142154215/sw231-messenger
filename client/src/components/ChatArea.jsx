@@ -5,8 +5,8 @@ import { useAuthStore } from '../store/authStore'
 import { socketEmit } from '../services/socket'
 import api from '../services/api'
 import MessageBubble from './MessageBubble'
-
-const EMOJIS = ['😀','😂','😍','🥰','😎','🤩','😭','🥳','🤔','😱','👍','❤️','🔥','💯','🙏','✨']
+import EmojiPicker from './EmojiPicker'
+import GifPicker from './GifPicker'
 
 function DateSeparator({ date }) {
   return (
@@ -40,6 +40,7 @@ export default function ChatArea() {
   const [uploading, setUploading] = useState(false)
   const [showStickers, setShowStickers] = useState(false)
   const [showEmoji, setShowEmoji] = useState(false)
+  const [showGif, setShowGif] = useState(false)
   const [recording, setRecording] = useState(false)
   const [stickerCategories, setStickerCategories] = useState([])
   const [activeStickerTab, setActiveStickerTab] = useState(0)
@@ -314,6 +315,19 @@ export default function ChatArea() {
     inputRef.current?.focus()
   }
 
+  const sendGif = (gifUrl, thumbnail) => {
+    if (!activeConversation) return
+    socketEmit('message:send', {
+      conversationId: activeConversation.id,
+      content: 'GIF',
+      type: 'image',
+      mediaUrl: gifUrl,
+      mediaType: 'image',
+      mimeType: 'image/gif',
+    })
+    setShowGif(false)
+  }
+
   const handleSend = async () => {
     if (!input.trim() || !activeConversation) return
     if (editingMsg) {
@@ -338,6 +352,7 @@ export default function ChatArea() {
       setEditingMsg(null)
       setShowStickers(false)
       setShowEmoji(false)
+      setShowGif(false)
     }
   }
 
@@ -545,17 +560,20 @@ export default function ChatArea() {
           </motion.div>
         )}
         {showEmoji && (
-          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-            className="border-t border-white/10 glass overflow-hidden">
-            <div className="grid grid-cols-8 sm:grid-cols-8 gap-1 px-3 py-2">
-              {EMOJIS.map((e, i) => (
-                <button key={i} onClick={() => sendEmoji(e)}
-                  className="text-xl p-1.5 hover:bg-white/10 rounded-lg transition-all hover:scale-110">
-                  {e}
-                </button>
-              ))}
-            </div>
-          </motion.div>
+          <div className="border-t border-white/10 glass relative">
+            <EmojiPicker
+              onSelect={sendEmoji}
+              onClose={() => setShowEmoji(false)}
+            />
+          </div>
+        )}
+        {showGif && (
+          <div className="border-t border-white/10 glass relative">
+            <GifPicker
+              onSelect={sendGif}
+              onClose={() => setShowGif(false)}
+            />
+          </div>
         )}
       </AnimatePresence>
 
@@ -595,9 +613,14 @@ export default function ChatArea() {
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg>
             </button>
 
-            <button onClick={() => setShowEmoji(!showEmoji)} title="Emoji"
+            <button onClick={() => { setShowEmoji(!showEmoji); setShowGif(false); setShowStickers(false) }} title="Emoji"
               className={`w-10 h-10 rounded-full glass flex items-center justify-center transition-all shrink-0 ${showEmoji ? 'text-nyx-400 bg-nyx-600/20' : 'text-gray-400 hover:text-nyx-400 hover:bg-white/10'}`}>
               <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01" /></svg>
+            </button>
+
+            <button onClick={() => { setShowGif(!showGif); setShowEmoji(false); setShowStickers(false) }} title="GIFs"
+              className={`w-10 h-10 rounded-full glass flex items-center justify-center transition-all shrink-0 ${showGif ? 'text-neon-cyan bg-neon-cyan/20' : 'text-gray-400 hover:text-neon-cyan hover:bg-white/10'}`}>
+              <span className="text-sm font-bold">GIF</span>
             </button>
 
             <button onClick={() => { setShowStickers(!showStickers); setShowEmoji(false) }} title="Stickers"
