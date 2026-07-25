@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w client\"",
     "build": "npm run build -w client",
-    "start": "npm start -w server"
+    "start": "node server/index.js"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"
