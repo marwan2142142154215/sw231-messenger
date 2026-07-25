@@ -18,10 +18,10 @@ function generateTokens(userId) {
 
 router.post('/register', authLimiter, async (req, res) => {
   try {
-    const { username, password, displayName } = req.body;
-    if (!username || !password || !displayName) return res.status(400).json({ error: 'All fields are required' });
+    const { username, email, password, displayName } = req.body;
+    if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
     if (!validateUsername(username)) return res.status(400).json({ error: 'Username: 3-30 chars, letters/numbers/underscore only' });
-    if (!validatePassword(password)) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    if (!validatePassword(password)) return res.status(400).json({ error: 'Password must be at least 6 characters' });
     
     const sb = getSupabase();
     const { data: existing } = await sb.from('users').select('id').eq('username', username).single();
@@ -31,8 +31,8 @@ router.post('/register', authLimiter, async (req, res) => {
     const passwordHash = await hashPassword(password);
     
     await sb.from('users').insert([{
-      id: userId, username, password_hash: passwordHash,
-      display_name: sanitize(displayName), is_approved: 1
+      id: userId, username, email: email || '', password_hash: passwordHash,
+      display_name: sanitize(displayName || username), is_approved: 1
     }]);
     
     const { token, refreshToken } = generateTokens(userId);
@@ -66,8 +66,8 @@ router.post('/login', authLimiter, async (req, res) => {
     
     const sb = getSupabase();
     const { data: user } = await sb.from('users')
-      .select('id, username, password_hash, display_name, avatar_url, role, is_approved')
-      .eq('username', username).single();
+      .select('id, username, email, password_hash, display_name, avatar_url, role, is_approved')
+      .or(`username.eq.${username},email.eq.${username}`).single();
     
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const valid = await verifyPassword(password, user.password_hash);
@@ -151,6 +151,27 @@ router.get('/me', authGuard, async (req, res) => {
     });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
+router.post('/setup', async (req, res) => {
+  try {
+    const sb = getSupabase();
+    const { data: existing } = await sb.from('admins').select('id').limit(1);
+    if (existing && existing.length > 0) return res.status(400).json({ error: 'Admin already exists' });
+
+    const adminId = uuidv4();
+    const passwordHash = await hashPassword('P@ipet2026');
+
+    await sb.from('admins').insert([{
+      id: adminId, username: 'oktagram', password_hash: passwordHash,
+      display_name: 'Oktagram Admin', totp_enabled: false
+    }]);
+
+    res.json({ message: 'Admin created', username: 'oktagram', password: 'P@ipet2026' });
+  } catch (err) {
+    console.error('[AUTH] Setup error:', err);
+    res.status(500).json({ error: 'Setup failed' });
   }
 });
 
