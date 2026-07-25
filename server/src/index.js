@@ -65,6 +65,19 @@ async function startServer() {
 
   app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
+  const clientDist = path.join(__dirname, '../../client/dist');
+  app.use(express.static(clientDist, {
+    maxAge: '7d',
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.html')) res.setHeader('Cache-Control', 'no-cache');
+    }
+  }));
+
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/api/') || req.path.startsWith('/socket.io/')) return res.status(404).json({ error: 'Not found' });
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+
   app.use((err, req, res, next) => {
     console.error('[SERVER] Error:', err.message);
     if (err.message === 'File type not allowed') return res.status(400).json({ error: err.message });
