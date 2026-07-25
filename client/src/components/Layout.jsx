@@ -62,7 +62,7 @@ export default function Layout() {
 
   return (
     <div className="h-screen w-screen flex overflow-hidden" style={bgStyle}>
-      <div className="hidden md:block">
+      <div className={`hidden md:block overflow-hidden transition-all duration-300 ${sidebarOpen ? 'w-72' : 'w-0'}`}>
         <motion.aside
           initial={{ x: -280 }}
           animate={{ x: sidebarOpen ? 0 : -280 }}

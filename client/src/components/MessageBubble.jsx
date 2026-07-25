@@ -270,18 +270,9 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit, searchH
                   )}
                 </div>
               )}
-              {!isOwn && !isSticker && message.type !== 'voice' && (
-                <div className="group/seen relative">
-                  <svg className="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
-                  <div className="absolute bottom-5 right-0 hidden group-hover/seen:block glass-strong rounded-lg px-2 py-1 text-[10px] text-gray-300 whitespace-nowrap z-30">
-                    {formatLastSeen(lastSeenMap[message.sender_id])}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}
-
         {groupedReactions.length > 0 && (
           <div className="flex gap-1 mt-1 flex-wrap relative">
             {groupedReactions.map((r, i) => (

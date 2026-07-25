@@ -75,12 +75,11 @@ export default function ChatArea() {
   useEffect(() => {
     if (isAtBottom) {
       setUnreadCount(0)
-      scrollToBottom(false)
     } else if (messages.length > lastSeenMsgCountRef.current) {
       setUnreadCount(prev => prev + (messages.length - lastSeenMsgCountRef.current))
     }
     lastSeenMsgCountRef.current = messages.length
-  }, [messages, isAtBottom, scrollToBottom])
+  }, [messages, isAtBottom])
 
   useEffect(() => {
     if (activeConversation) {
@@ -90,9 +89,8 @@ export default function ChatArea() {
       setShowSearch(false)
       setUnreadCount(0)
       lastSeenMsgCountRef.current = 0
-      setTimeout(() => scrollToBottom(false), 50)
     }
-  }, [activeConversation, scrollToBottom])
+  }, [activeConversation])
 
   useEffect(() => {
     if (!activeConversation || !user || messages.length === 0) return
