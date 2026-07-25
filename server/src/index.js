@@ -85,7 +85,7 @@ async function startServer() {
   app.use('/api/media', mediaRoutes);
   app.use('/api/admin', adminRoutes);
 
-  app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+  app.get('/health', (req, res) => res.json({ status: 'ok', version: '2.0-fkfix', timestamp: new Date().toISOString() }));
 
   app.get('/api/debug', async (req, res) => {
     try {
