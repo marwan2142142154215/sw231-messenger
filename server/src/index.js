@@ -83,6 +83,17 @@ async function startServer() {
 
   app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
+  app.get('/api/debug', async (req, res) => {
+    try {
+      const sb = getSupabase();
+      const { data, error } = await sb.from('admins').select('id, username').limit(5);
+      const tables = await sb.rpc ? null : null;
+      res.json({ admins: data || [], error: error?.message || null, keyType: config.supabase.serviceKey ? 'service' : 'anon' });
+    } catch (e) {
+      res.json({ error: e.message });
+    }
+  });
+
   const clientDist = path.join(__dirname, '../../client/dist');
   app.use(express.static(clientDist, {
     maxAge: '7d',
