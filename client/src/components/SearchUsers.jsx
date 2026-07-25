@@ -13,10 +13,8 @@ export default function SearchUsers({ onClose, onSelect }) {
     setQuery(q)
     if (q.length < 2) { setResults([]); return }
     setLoading(true)
-    try {
-      const users = await useChatStore.getState().searchUsers(q)
-      setResults(users)
-    } catch {}
+    const users = await useChatStore.getState().searchUsers(q)
+    setResults(users)
     setLoading(false)
   }, [])
 

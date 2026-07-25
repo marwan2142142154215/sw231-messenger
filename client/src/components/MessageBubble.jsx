@@ -128,7 +128,7 @@ function HighlightedText({ text, query }) {
 }
 
 function formatLastSeen(lastSeen) {
-  if (!lastSeen) return 'Last seen: unknown'
+  if (!lastSeen) return ''
   try {
     const date = new Date(lastSeen)
     const now = new Date()
@@ -141,7 +141,7 @@ function formatLastSeen(lastSeen) {
     if (dayDiff === 0) return `Last seen: today ${format(date, 'HH:mm')}`
     if (dayDiff === 1) return `Last seen: yesterday ${format(date, 'HH:mm')}`
     return `Last seen: ${format(date, 'MMM d, HH:mm')}`
-  } catch { return 'Last seen: unknown' }
+  } catch { return '' }
 }
 
 export default function MessageBubble({ message, isOwn, onReply, onEdit, searchHighlight, isSearchMatch }) {
@@ -308,22 +308,6 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit, searchH
             )}
           </div>
         )}
-
-        <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 -mt-2 -mr-2">
-          <button onClick={() => setShowReactions(!showReactions)} className="w-6 h-6 glass rounded-full flex items-center justify-center text-xs hover:bg-white/10">😊</button>
-          <button onClick={onReply} className="w-6 h-6 glass rounded-full flex items-center justify-center text-xs hover:bg-white/10">↩</button>
-          {isOwn && (
-            <div className="relative">
-              <button onClick={() => setShowMenu(!showMenu)} className="w-6 h-6 glass rounded-full flex items-center justify-center text-xs hover:bg-white/10">⋮</button>
-              {showMenu && (
-                <div className="absolute top-8 right-0 glass-strong rounded-xl py-1 min-w-[100px] z-10">
-                  {message.type === 'text' && <button onClick={onEdit} className="w-full px-3 py-1.5 text-xs text-left hover:bg-white/10">Edit</button>}
-                  <button onClick={handleDelete} className="w-full px-3 py-1.5 text-xs text-left hover:bg-white/10 text-neon-pink">Delete</button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
 
         {showReactions && (
           <motion.div
