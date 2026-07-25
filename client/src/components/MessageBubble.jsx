@@ -105,7 +105,25 @@ function MessageMedia({ message }) {
   }
 }
 
-export default function MessageBubble({ message, isOwn, onReply, onEdit }) {
+function HighlightedText({ text, query }) {
+  if (!query || !text) return <>{text}</>
+  const q = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regex = new RegExp(`(${q})`, 'gi')
+  const parts = text.split(regex)
+  return (
+    <>
+      {parts.map((part, i) =>
+        regex.test(part) ? (
+          <mark key={i} className="bg-nyx-400/40 text-yellow-200 rounded px-0.5">{part}</mark>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  )
+}
+
+export default function MessageBubble({ message, isOwn, onReply, onEdit, searchHighlight, isSearchMatch }) {
   const [showReactions, setShowReactions] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
   const retryMessage = useChatStore(s => s.retryMessage)
@@ -141,7 +159,7 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit }) {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
     >
-      <div className={`relative group max-w-sm sm:max-w-md ${isOwn ? 'order-1' : 'order-1'}`}>
+      <div className={`relative group max-w-sm sm:max-w-md ${isOwn ? 'order-1' : 'order-1'} ${isSearchMatch ? 'transition-all duration-500' : ''}`}>
         {message.replyTo && (
           <div className="text-xs text-gray-500 mb-1 px-2 py-1 glass rounded-t-lg border-b-0">
             Replying to: {message.replyTo.content?.substring(0, 50)}
@@ -169,7 +187,9 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit }) {
             )}
 
             {hasText && (
-              <p className="text-sm leading-relaxed break-words">{message.content}</p>
+              <p className="text-sm leading-relaxed break-words">
+                {searchHighlight ? <HighlightedText text={message.content} query={searchHighlight} /> : message.content}
+              </p>
             )}
 
             <div className={`flex items-center gap-1.5 mt-1 ${isOwn ? 'justify-end' : ''}`}>

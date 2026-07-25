@@ -157,6 +157,26 @@
   }
 }
 
+[data-msg-id] {
+  transition: all 0.3s ease;
+}
+
+[data-msg-id].ring-2 {
+  animation: search-pulse 2s ease-out;
+}
+
+@keyframes search-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.5); }
+  50% { box-shadow: 0 0 0 6px rgba(139, 92, 246, 0.2); }
+  100% { box-shadow: 0 0 0 0 rgba(139, 92, 246, 0); }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
 .aurora-bg {
   background: linear-gradient(-45deg, #1a0536, #0f0c29, #302b63, #24243e);
   background-size: 400% 400%;

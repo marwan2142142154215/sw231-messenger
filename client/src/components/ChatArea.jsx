@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useChatStore } from '../store/chatStore'
 import { useAuthStore } from '../store/authStore'
@@ -7,6 +7,28 @@ import api from '../services/api'
 import MessageBubble from './MessageBubble'
 
 const EMOJIS = ['😀','😂','😍','🥰','😎','🤩','😭','🥳','🤔','😱','👍','❤️','🔥','💯','🙏','✨']
+
+function DateSeparator({ date }) {
+  return (
+    <div className="flex items-center gap-3 py-3 select-none">
+      <div className="flex-1 h-px bg-white/10" />
+      <span className="text-[11px] text-gray-500 font-medium px-2 py-1 rounded-full glass">{date}</span>
+      <div className="flex-1 h-px bg-white/10" />
+    </div>
+  )
+}
+
+function formatDateSeparator(dateStr) {
+  const d = new Date(dateStr)
+  const now = new Date()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const msgDate = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+  const diff = today - msgDate
+
+  if (diff === 0) return 'Today'
+  if (diff === 86400000) return 'Yesterday'
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: d.getFullYear() !== now.getFullYear() ? 'numeric' : undefined })
+}
 
 export default function ChatArea() {
   const activeConversation = useChatStore(s => s.activeConversation)
@@ -21,30 +43,131 @@ export default function ChatArea() {
   const [recording, setRecording] = useState(false)
   const [stickerCategories, setStickerCategories] = useState([])
   const [activeStickerTab, setActiveStickerTab] = useState(0)
+  const [recordingTime, setRecordingTime] = useState(0)
+  const [isAtBottom, setIsAtBottom] = useState(true)
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  const [showSearch, setShowSearch] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchMatches, setSearchMatches] = useState([])
+  const [currentMatchIdx, setCurrentMatchIdx] = useState(0)
+
+  const messagesContainerRef = useRef(null)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+  const searchInputRef = useRef(null)
   const fileInputRef = useRef(null)
   const mediaRecorderRef = useRef(null)
   const audioChunksRef = useRef([])
   const recordingTimerRef = useRef(null)
-  const [recordingTime, setRecordingTime] = useState(0)
+  const lastSeenMsgCountRef = useRef(0)
+
   const sendMessage = useChatStore(s => s.sendMessage)
   const user = useAuthStore(s => s.user)
   const typingTimeout = useRef(null)
 
+  const scrollToBottom = useCallback((smooth = true) => {
+    messagesEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant' })
+  }, [])
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    if (isAtBottom) {
+      setUnreadCount(0)
+      scrollToBottom(false)
+    } else if (messages.length > lastSeenMsgCountRef.current) {
+      setUnreadCount(prev => prev + (messages.length - lastSeenMsgCountRef.current))
+    }
+    lastSeenMsgCountRef.current = messages.length
+  }, [messages, isAtBottom, scrollToBottom])
 
   useEffect(() => {
     if (activeConversation) {
       socketEmit('conversation:join', activeConversation.id)
+      setSearchQuery('')
+      setSearchMatches([])
+      setShowSearch(false)
+      setUnreadCount(0)
+      lastSeenMsgCountRef.current = 0
+      setTimeout(() => scrollToBottom(false), 50)
     }
-  }, [activeConversation])
+  }, [activeConversation, scrollToBottom])
 
   useEffect(() => {
     api.get('/media/stickers').then(r => setStickerCategories(r.data.categories || [])).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (showSearch && searchInputRef.current) searchInputRef.current.focus()
+  }, [showSearch])
+
+  const handleScroll = useCallback(() => {
+    const el = messagesContainerRef.current
+    if (!el) return
+    const threshold = 80
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < threshold
+    setIsAtBottom(atBottom)
+    if (atBottom) setUnreadCount(0)
+  }, [])
+
+  useEffect(() => {
+    const el = messagesContainerRef.current
+    if (!el) return
+    el.addEventListener('scroll', handleScroll, { passive: true })
+    return () => el.removeEventListener('scroll', handleScroll)
+  }, [handleScroll])
+
+  const messagesWithDates = useMemo(() => {
+    const result = []
+    let lastDate = ''
+    for (const msg of messages) {
+      const dateStr = formatDateSeparator(msg.created_at)
+      if (dateStr !== lastDate) {
+        result.push({ _type: 'date', date: dateStr, _key: `date-${msg.id}` })
+        lastDate = dateStr
+      }
+      result.push({ _type: 'message', ...msg })
+    }
+    return result
+  }, [messages])
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setSearchMatches([])
+      setCurrentMatchIdx(0)
+      return
+    }
+    const q = searchQuery.toLowerCase()
+    const matches = messages
+      .map((msg, idx) => ({ idx, msg }))
+      .filter(({ msg }) => msg.content && msg.content.toLowerCase().includes(q))
+    setSearchMatches(matches)
+    setCurrentMatchIdx(0)
+    if (matches.length > 0) {
+      scrollToMatch(matches[0].msg.id)
+    }
+  }, [searchQuery, messages])
+
+  const scrollToMatch = useCallback((msgId) => {
+    const el = messagesContainerRef.current
+    if (!el) return
+    const msgEl = el.querySelector(`[data-msg-id="${msgId}"]`)
+    if (msgEl) {
+      msgEl.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      msgEl.classList.add('ring-2', 'ring-nyx-400', 'ring-offset-2', 'ring-offset-transparent')
+      setTimeout(() => {
+        msgEl.classList.remove('ring-2', 'ring-nyx-400', 'ring-offset-2', 'ring-offset-transparent')
+      }, 2000)
+    }
+  }, [])
+
+  const navigateMatch = useCallback((dir) => {
+    if (searchMatches.length === 0) return
+    let next = currentMatchIdx + dir
+    if (next < 0) next = searchMatches.length - 1
+    if (next >= searchMatches.length) next = 0
+    setCurrentMatchIdx(next)
+    scrollToMatch(searchMatches[next].msg.id)
+  }, [searchMatches, currentMatchIdx, scrollToMatch])
 
   const handleTyping = () => {
     if (!activeConversation) return
@@ -74,7 +197,7 @@ export default function ChatArea() {
     socketEmit('message:send', {
       conversationId: activeConversation.id,
       content: content || mediaData.originalName || '📎 File',
-      type: type,
+      type,
       mediaUrl: mediaData.url,
       mediaType: type,
       mimeType: mediaData.mimeType,
@@ -205,6 +328,7 @@ export default function ChatArea() {
       handleSend()
     }
     if (e.key === 'Escape') {
+      if (showSearch) { setShowSearch(false); setSearchQuery('') }
       setReplyTo(null)
       setEditingMsg(null)
       setShowStickers(false)
@@ -240,31 +364,98 @@ export default function ChatArea() {
 
   const otherMember = getOtherMember()
   const displayName = activeConversation.type === 'group' ? activeConversation.name : (otherMember?.display_name || otherMember?.username || 'Chat')
+  const searchMatchIds = new Set(searchMatches.map(m => m.msg.id))
 
   return (
-    <div className="flex-1 flex flex-col h-full" onPaste={handlePaste}>
-      <div className="px-6 py-3 glass border-b border-white/10 flex items-center gap-3">
+    <div className="flex-1 flex flex-col h-full relative" onPaste={handlePaste}>
+      <div className="px-4 sm:px-6 py-3 glass border-b border-white/10 flex items-center gap-3">
         <div className="w-9 h-9 rounded-full bg-gradient-to-br from-nyx-500 to-neon-purple flex items-center justify-center text-sm font-bold shrink-0">
           {displayName.charAt(0).toUpperCase()}
         </div>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="font-medium text-sm truncate">{displayName}</p>
           {typingNames.length > 0 && (
             <p className="text-xs text-neon-cyan animate-pulse">typing...</p>
           )}
         </div>
+        <button onClick={() => { setShowSearch(!showSearch); if (showSearch) setSearchQuery('') }}
+          className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0 ${showSearch ? 'bg-nyx-600 text-white' : 'glass text-gray-400 hover:text-nyx-400 hover:bg-white/10'}`}
+          title="Search messages">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-3">
-        {messages.map(msg => (
-          <MessageBubble
-            key={msg.id}
-            message={msg}
-            isOwn={msg.sender_id === user?.id}
-            onReply={() => setReplyTo(msg)}
-            onEdit={() => { setEditingMsg(msg); setInput(msg.content); inputRef.current?.focus() }}
-          />
-        ))}
+      <AnimatePresence>
+        {showSearch && (
+          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            className="border-b border-white/10 glass overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-2.5">
+              <svg className="w-4 h-4 text-gray-500 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); navigateMatch(e.shiftKey ? -1 : 1) }
+                  if (e.key === 'Escape') { setShowSearch(false); setSearchQuery('') }
+                }}
+                placeholder="Search in conversation..."
+                className="flex-1 bg-transparent text-sm text-white placeholder-gray-500 outline-none"
+              />
+              {searchMatches.length > 0 && (
+                <span className="text-[11px] text-gray-400 whitespace-nowrap">
+                  {currentMatchIdx + 1} / {searchMatches.length}
+                </span>
+              )}
+              {searchMatches.length > 0 && (
+                <div className="flex gap-0.5">
+                  <button onClick={() => navigateMatch(-1)}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-all">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" /></svg>
+                  </button>
+                  <button onClick={() => navigateMatch(1)}
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-white hover:bg-white/10 transition-all">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                  </button>
+                </div>
+              )}
+              {searchQuery && (
+                <span className="text-[11px] text-gray-500 whitespace-nowrap">
+                  {searchMatches.length === 0 ? 'No results' : ''}
+                </span>
+              )}
+              <button onClick={() => { setShowSearch(false); setSearchQuery('') }}
+                className="w-7 h-7 rounded-lg flex items-center justify-center text-gray-500 hover:text-white hover:bg-white/10 transition-all">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-1 relative">
+        {messagesWithDates.map((item) => {
+          if (item._type === 'date') {
+            return <DateSeparator key={item._key} date={item.date} />
+          }
+          return (
+            <div key={item.id} data-msg-id={item.id}>
+              <MessageBubble
+                message={item}
+                isOwn={item.sender_id === user?.id}
+                onReply={() => setReplyTo(item)}
+                onEdit={() => { setEditingMsg(item); setInput(item.content); inputRef.current?.focus() }}
+                searchHighlight={searchQuery.trim() ? searchQuery : null}
+                isSearchMatch={searchMatchIds.has(item.id)}
+              />
+            </div>
+          )
+        })}
         {uploading && (
           <div className="flex justify-center">
             <div className="glass rounded-xl px-4 py-2 flex items-center gap-2 text-sm text-gray-400">
@@ -278,6 +469,28 @@ export default function ChatArea() {
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      <AnimatePresence>
+        {!isAtBottom && (
+          <motion.button
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+            onClick={() => { scrollToBottom(); setUnreadCount(0) }}
+            className="absolute bottom-28 right-6 z-20 w-10 h-10 rounded-full bg-nyx-600 text-white flex items-center justify-center shadow-lg shadow-nyx-600/40 hover:bg-nyx-500 transition-all active:scale-90"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+            </svg>
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-neon-pink text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showStickers && (
