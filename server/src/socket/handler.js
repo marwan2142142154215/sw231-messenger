@@ -130,19 +130,19 @@ function initSocket(io) {
 
         io.to('conv:' + conversationId).emit('message:new', message);
 
-        sb.from('conversation_members').select('user_id').eq('conversation_id', conversationId).neq('user_id', socket.user.id)
-          .then(({ data: members }) => {
-            (members || []).forEach(m => {
-              const memberOnline = onlineUsers.get(m.user_id);
-              if (memberOnline) {
-                io.to(memberOnline.socketId).emit('notification', {
-                  type: 'new_message', conversationId,
-                  from: socket.user.display_name || socket.user.username,
-                  preview: msgContent.substring(0, 50)
-                });
-              }
+        const { data: members } = await sb.from('conversation_members')
+          .select('user_id').eq('conversation_id', conversationId).neq('user_id', socket.user.id);
+        (members || []).forEach(m => {
+          const memberOnline = onlineUsers.get(m.user_id);
+          if (memberOnline) {
+            io.to(memberOnline.socketId).emit('message:new', message);
+            io.to(memberOnline.socketId).emit('notification', {
+              type: 'new_message', conversationId,
+              from: socket.user.display_name || socket.user.username,
+              preview: msgContent.substring(0, 50)
             });
-          }).catch(() => {});
+          }
+        });
       } catch (err) { console.error('[SOCKET] Send error:', err); }
     });
 

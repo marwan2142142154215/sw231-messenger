@@ -127,10 +127,16 @@ export const useChatStore = create((set, get) => ({
       const { data } = await api.post('/conversations/private', { userId: participantId })
       const conversationId = data.conversationId
       const { conversations } = get()
-      if (!conversations.find(c => c.id === conversationId)) {
+      let conv = conversations.find(c => c.id === conversationId)
+      if (!conv) {
         await get().loadConversations()
+        const refreshed = get().conversations
+        conv = refreshed.find(c => c.id === conversationId)
       }
-      return conversationId
+      if (!conv) {
+        conv = { id: conversationId, type: 'private', members: data.members || [], name: null }
+      }
+      return conv
     } catch (err) {
       throw new Error(err.response?.data?.error || 'Failed to create conversation')
     }
