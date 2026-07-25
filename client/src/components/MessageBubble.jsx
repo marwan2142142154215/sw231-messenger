@@ -1,15 +1,14 @@
 import { motion } from 'framer-motion'
-import { format } from 'date-fns'
-import { useState, useRef } from 'react'
+import { format, formatDistanceToNow } from 'date-fns'
+import { useState } from 'react'
 import { socketEmit } from '../services/socket'
 import { useChatStore } from '../store/chatStore'
 
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '😡']
-const API_BASE = import.meta.env.VITE_API_URL || ''
 
 function resolveUrl(url) {
   if (!url) return ''
-  return url.startsWith('http') ? url : `${API_BASE}${url}`
+  return url.startsWith('http') ? url : `${import.meta.env.VITE_API_URL || ''}${url}`
 }
 
 function MediaImage({ url, fileName }) {
@@ -39,28 +38,23 @@ function MediaImage({ url, fileName }) {
   )
 }
 
-function MediaVideo({ url, fileName }) {
+function MediaVideo({ url }) {
   const src = resolveUrl(url)
   if (!src) return null
   return (
     <div className="rounded-xl overflow-hidden max-w-[300px]">
-      <video
-        src={src}
-        controls
-        className="max-w-[300px] max-h-[320px] rounded-xl"
-        preload="metadata"
-      />
+      <video src={src} controls className="max-w-[300px] max-h-[320px] rounded-xl" preload="metadata" />
     </div>
   )
 }
 
-function MediaAudio({ url, fileName }) {
+function MediaAudio({ url }) {
   const src = resolveUrl(url)
   if (!src) return null
   return (
     <div className="flex items-center gap-3 glass rounded-xl px-3 py-2 min-w-[200px]">
       <svg className="w-5 h-5 text-nyx-400 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.105-2 3-2 3 .895 3 2z" />
       </svg>
       <audio src={src} controls className="max-w-[200px] h-8" preload="metadata" />
     </div>
@@ -105,8 +99,8 @@ function MediaFile({ url, fileName, fileSize }) {
 function MessageMedia({ message }) {
   switch (message.type) {
     case 'image': return <MediaImage url={message.mediaUrl || message.media_url} fileName={message.fileName || message.file_name} />
-    case 'video': return <MediaVideo url={message.mediaUrl || message.media_url} fileName={message.fileName || message.file_name} />
-    case 'audio': return <MediaAudio url={message.mediaUrl || message.media_url} fileName={message.fileName || message.file_name} />
+    case 'video': return <MediaVideo url={message.mediaUrl || message.media_url} />
+    case 'audio': return <MediaAudio url={message.mediaUrl || message.media_url} />
     case 'voice': return <MediaVoice url={message.mediaUrl || message.media_url} />
     case 'sticker': return <MediaSticker content={message.content} />
     case 'file': return <MediaFile url={message.mediaUrl || message.media_url} fileName={message.fileName || message.file_name} fileSize={message.fileSize || message.file_size} />
@@ -133,10 +127,31 @@ function HighlightedText({ text, query }) {
   )
 }
 
+function formatLastSeen(lastSeen) {
+  if (!lastSeen) return 'Last seen: unknown'
+  try {
+    const date = new Date(lastSeen)
+    const now = new Date()
+    const diffMin = (now - date) / 60000
+    if (diffMin < 1) return 'Last seen: just now'
+    if (diffMin < 60) return `Last seen: ${Math.floor(diffMin)}m ago`
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const seenDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    const dayDiff = (today - seenDate) / 86400000
+    if (dayDiff === 0) return `Last seen: today ${format(date, 'HH:mm')}`
+    if (dayDiff === 1) return `Last seen: yesterday ${format(date, 'HH:mm')}`
+    return `Last seen: ${format(date, 'MMM d, HH:mm')}`
+  } catch { return 'Last seen: unknown' }
+}
+
 export default function MessageBubble({ message, isOwn, onReply, onEdit, searchHighlight, isSearchMatch }) {
   const [showReactions, setShowReactions] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
+  const [showReactionNames, setShowReactionNames] = useState(null)
   const retryMessage = useChatStore(s => s.retryMessage)
+  const lastSeenMap = useChatStore(s => s.lastSeenMap)
+
+  if (!message || !message.id) return null
 
   const handleReact = (emoji) => {
     socketEmit('message:react', { messageId: message.id, emoji, conversationId: message.conversation_id })
@@ -149,13 +164,15 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit, searchH
   }
 
   const handleRetry = () => {
+    if (!message.conversation_id) return
     retryMessage(message.id, message.conversation_id, message.content, message.replyTo, { id: message.sender_id, username: message.username, display_name: message.display_name, avatar_url: message.avatar_url }, socketEmit)
   }
 
   const groupedReactions = (message.reactions || []).reduce((acc, r) => {
+    if (!r || !r.emoji) return acc
     const existing = acc.find(a => a.emoji === r.emoji)
-    if (existing) { existing.count++; existing.userIds.push(r.userId) }
-    else acc.push({ emoji: r.emoji, count: 1, userIds: [r.userId] })
+    if (existing) { existing.count++; existing.userIds.push(r.userId); if (r.username) existing.names.push(r.display_name || r.username) }
+    else acc.push({ emoji: r.emoji, count: 1, userIds: [r.userId], names: r.username ? [r.display_name || r.username] : [] })
     return acc
   }, [])
 
@@ -163,16 +180,19 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit, searchH
   const hasText = message.type === 'text' || (message.content && message.type !== 'sticker' && message.type !== 'voice')
   const hasMedia = message.type && message.type !== 'text' && message.type !== 'sticker'
 
+  const senderLastSeen = lastSeenMap[message.sender_id]
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 10, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
     >
-      <div className={`relative group max-w-sm sm:max-w-md ${isOwn ? 'order-1' : 'order-1'} ${isSearchMatch ? 'transition-all duration-500' : ''}`}>
+      <div className={`relative group max-w-sm sm:max-w-md ${isSearchMatch ? 'transition-all duration-500' : ''}`}>
         {message.replyTo && (
-          <div className="text-xs text-gray-500 mb-1 px-2 py-1 glass rounded-t-lg border-b-0">
-            Replying to: {message.replyTo.content?.substring(0, 50)}
+          <div className={`text-xs mb-1 px-3 py-1.5 glass rounded-t-lg border-b-0 ${isOwn ? 'rounded-tr-none' : 'rounded-tl-none'}`}>
+            <p className="text-nyx-300 font-medium truncate">{message.replyTo.display_name || message.replyTo.username || 'Unknown'}</p>
+            <p className="text-gray-500 truncate mt-0.5">{message.replyTo.content?.substring(0, 60) || 'Media'}</p>
           </div>
         )}
 
@@ -188,7 +208,10 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit, searchH
             className={isOwn ? 'chat-bubble-right' : 'chat-bubble-left'}
             onDoubleClick={() => setShowReactions(!showReactions)}
           >
-            {message.is_edited === 1 && <span className="text-xs text-gray-500 italic">edited </span>}
+            {!isOwn && message.display_name && (
+              <p className="text-[11px] font-semibold text-nyx-300 mb-0.5">{message.display_name}</p>
+            )}
+            {message.is_edited === 1 && <span className="text-[10px] text-gray-500 italic">edited </span>}
 
             {hasMedia && (
               <div className={`${hasText ? 'mb-2' : ''}`}>
@@ -215,22 +238,42 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit, searchH
               <p className={`text-[10px] ${isOwn ? 'text-white/50' : 'text-gray-500'}`}>
                 {(() => { try { return format(new Date(message.created_at), 'HH:mm') } catch { return '' } })()}
               </p>
+              {!isOwn && !isSticker && message.type !== 'voice' && (
+                <div className="group/seen relative">
+                  <svg className="w-3 h-3 text-gray-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
+                  <div className="absolute bottom-5 right-0 hidden group-hover/seen:block glass-strong rounded-lg px-2 py-1 text-[10px] text-gray-300 whitespace-nowrap z-30">
+                    {formatLastSeen(senderLastSeen)}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {groupedReactions.length > 0 && (
-          <div className="flex gap-1 mt-1 flex-wrap">
+          <div className="flex gap-1 mt-1 flex-wrap relative">
             {groupedReactions.map((r, i) => (
               <button
                 key={i}
-                onClick={() => handleReact(r.emoji)}
+                onClick={() => setShowReactionNames(showReactionNames === i ? null : i)}
                 className="glass rounded-full px-2 py-0.5 text-xs flex items-center gap-1 hover:bg-white/10 transition-all"
               >
                 <span>{r.emoji}</span>
                 <span className="text-gray-400">{r.count}</span>
               </button>
             ))}
+            {showReactionNames !== null && groupedReactions[showReactionNames] && (
+              <div className="absolute bottom-6 left-0 glass-strong rounded-lg px-3 py-2 text-[11px] text-gray-300 whitespace-nowrap z-30 min-w-[120px]">
+                <p className="font-medium text-white mb-0.5">{groupedReactions[showReactionNames].emoji}</p>
+                {groupedReactions[showReactionNames].names.length > 0 ? (
+                  groupedReactions[showReactionNames].names.map((name, ni) => (
+                    <p key={ni} className="text-gray-400">{name}</p>
+                  ))
+                ) : (
+                  <p className="text-gray-500">{groupedReactions[showReactionNames].count} reaction{groupedReactions[showReactionNames].count > 1 ? 's' : ''}</p>
+                )}
+              </div>
+            )}
           </div>
         )}
 

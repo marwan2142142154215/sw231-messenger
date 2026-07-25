@@ -63,6 +63,7 @@ export default function ChatArea() {
   const lastSeenMsgCountRef = useRef(0)
 
   const sendMessage = useChatStore(s => s.sendMessage)
+  const onlineUsers = useChatStore(s => s.onlineUsers)
   const user = useAuthStore(s => s.user)
   const typingTimeout = useRef(null)
 
@@ -369,6 +370,30 @@ export default function ChatArea() {
   const otherMember = getOtherMember()
   const displayName = activeConversation.type === 'group' ? activeConversation.name : (otherMember?.display_name || otherMember?.username || 'Chat')
   const searchMatchIds = new Set(searchMatches.map(m => m.msg.id))
+  const otherUserId = otherMember?.id
+  const isOnline = otherUserId ? onlineUsers.has(otherUserId) : false
+  const otherLastSeen = useChatStore.getState().lastSeenMap?.[otherUserId]
+
+  const formatHeaderStatus = () => {
+    if (typingNames.length > 0) return null
+    if (isOnline) return <p className="text-xs text-neon-cyan">online</p>
+    if (otherLastSeen) {
+      try {
+        const d = new Date(otherLastSeen)
+        const now = new Date()
+        const diffMin = (now - d) / 60000
+        if (diffMin < 1) return <p className="text-xs text-gray-500">last seen just now</p>
+        if (diffMin < 60) return <p className="text-xs text-gray-500">last seen {Math.floor(diffMin)}m ago</p>
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const seenDate = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+        const dayDiff = (today - seenDate) / 86400000
+        if (dayDiff === 0) return <p className="text-xs text-gray-500">last seen today {d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</p>
+        if (dayDiff === 1) return <p className="text-xs text-gray-500">last seen yesterday {d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</p>
+        return <p className="text-xs text-gray-500">last seen {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} {d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</p>
+      } catch {}
+    }
+    return null
+  }
 
   return (
     <div className="flex-1 flex flex-col h-full relative" onPaste={handlePaste}>
@@ -381,6 +406,7 @@ export default function ChatArea() {
           {typingNames.length > 0 && (
             <p className="text-xs text-neon-cyan animate-pulse">typing...</p>
           )}
+          {formatHeaderStatus()}
         </div>
         <button onClick={() => { setShowSearch(!showSearch); if (showSearch) setSearchQuery('') }}
           className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shrink-0 ${showSearch ? 'bg-nyx-600 text-white' : 'glass text-gray-400 hover:text-nyx-400 hover:bg-white/10'}`}

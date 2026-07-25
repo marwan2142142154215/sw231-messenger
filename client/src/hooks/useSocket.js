@@ -21,6 +21,7 @@ export function useSocket() {
     socketRef.current = socket
 
     const onMessageNew = (message) => {
+      if (!message || !message.id) return
       const { addMessage } = useChatStore.getState()
       addMessage(message)
       const authUser = useAuthStore.getState().user
@@ -38,18 +39,19 @@ export function useSocket() {
 
     const onMessageError = ({ error, tempId }) => {
       console.error('[SOCKET] Message error:', error)
-      useChatStore.getState().markMessageFailed(tempId)
+      if (tempId) useChatStore.getState().markMessageFailed(tempId)
     }
 
     const onMessageEdited = ({ messageId, content }) => {
-      useChatStore.getState().updateMessage(messageId, { content, is_edited: 1 })
+      if (messageId) useChatStore.getState().updateMessage(messageId, { content, is_edited: 1 })
     }
 
     const onMessageDeleted = ({ messageId }) => {
-      useChatStore.getState().removeMessage(messageId)
+      if (messageId) useChatStore.getState().removeMessage(messageId)
     }
 
-    const onMessageReaction = ({ messageId, emoji, action, userId }) => {
+    const onMessageReaction = ({ messageId, emoji, action, userId, username, display_name }) => {
+      if (!messageId || !emoji) return
       const messages = useChatStore.getState().messages
       const msg = messages.find(m => m.id === messageId)
       if (!msg) return
@@ -57,17 +59,31 @@ export function useSocket() {
       if (action === 'removed') {
         reactions = reactions.filter(r => !(r.emoji === emoji && r.userId === userId))
       } else {
-        reactions.push({ emoji, userId })
+        reactions.push({ emoji, userId, username, display_name })
       }
       useChatStore.getState().updateMessage(messageId, { reactions })
     }
 
     const onTypingStart = ({ userId, conversationId }) => {
-      useChatStore.getState().setTyping(conversationId, userId, true)
+      if (userId && conversationId) useChatStore.getState().setTyping(conversationId, userId, true)
     }
 
     const onTypingStop = ({ userId, conversationId }) => {
-      useChatStore.getState().setTyping(conversationId, userId, false)
+      if (userId && conversationId) useChatStore.getState().setTyping(conversationId, userId, false)
+    }
+
+    const onUserStatus = ({ userId, status, lastSeen }) => {
+      if (!userId) return
+      const { onlineUsers, updateLastSeen } = useChatStore.getState()
+      const newSet = new Set(onlineUsers)
+      if (status === 'online') newSet.add(userId)
+      else newSet.delete(userId)
+      useChatStore.setState({ onlineUsers: newSet })
+      if (lastSeen) updateLastSeen(userId, lastSeen)
+    }
+
+    const onUserLastSeen = ({ userId, lastSeen }) => {
+      if (userId && lastSeen) useChatStore.getState().updateLastSeen(userId, lastSeen)
     }
 
     const onConnected = () => {
@@ -81,6 +97,8 @@ export function useSocket() {
     socket.on('message:reaction', onMessageReaction)
     socket.on('typing:start', onTypingStart)
     socket.on('typing:stop', onTypingStop)
+    socket.on('user:status', onUserStatus)
+    socket.on('user:last_seen', onUserLastSeen)
     socket.on('connected', onConnected)
 
     return () => {
@@ -92,6 +110,8 @@ export function useSocket() {
       socket.off('message:reaction', onMessageReaction)
       socket.off('typing:start', onTypingStart)
       socket.off('typing:stop', onTypingStop)
+      socket.off('user:status', onUserStatus)
+      socket.off('user:last_seen', onUserLastSeen)
       socket.off('connected', onConnected)
     }
   }, [user, navigate])

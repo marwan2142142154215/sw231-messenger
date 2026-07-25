@@ -11,6 +11,7 @@ export default function Sidebar() {
   const activeConversation = useChatStore(s => s.activeConversation)
   const setActiveConversation = useChatStore(s => s.setActiveConversation)
   const onlineUsers = useChatStore(s => s.onlineUsers)
+  const lastSeenMap = useChatStore(s => s.lastSeenMap)
   const user = useAuthStore(s => s.user)
   const navigate = useNavigate()
   const { conversationId } = useParams()
@@ -36,8 +37,31 @@ export default function Sidebar() {
   }
 
   const getOtherMember = (conv) => {
-    if (!conv.members) return null
+    if (!conv?.members) return null
     return conv.members.find(m => m.id !== user?.id) || conv.members[0]
+  }
+
+  const formatSidebarStatus = (other) => {
+    if (!other) return ''
+    const isOnline = other.id ? onlineUsers.has(other.id) : false
+    if (isOnline) return 'online'
+    const ls = other.last_seen || lastSeenMap[other.id]
+    if (ls) {
+      try {
+        const d = new Date(ls)
+        const now = new Date()
+        const diffMin = (now - d) / 60000
+        if (diffMin < 1) return 'just now'
+        if (diffMin < 60) return `${Math.floor(diffMin)}m ago`
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const seenDate = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+        const dayDiff = (today - seenDate) / 86400000
+        if (dayDiff === 0) return `today ${d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}`
+        if (dayDiff === 1) return `yesterday`
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      } catch {}
+    }
+    return ''
   }
 
   const filtered = conversations.filter(c => {
@@ -98,7 +122,15 @@ export default function Sidebar() {
                 </div>
                 <div className="flex-1 text-left min-w-0">
                   <p className="font-medium text-sm truncate">{otherName}</p>
-                  <p className="text-xs text-gray-500 truncate">{conv.lastMessage || 'No messages yet'}</p>
+                  <div className="flex items-center gap-1">
+                    {isOnline && <div className="w-1.5 h-1.5 rounded-full bg-neon-cyan shrink-0" />}
+                    <p className={`text-xs truncate ${isOnline ? 'text-neon-cyan' : 'text-gray-500'}`}>
+                      {conv.lastMessage ? (conv.lastMessage.length > 35 ? conv.lastMessage.substring(0, 35) + '...' : conv.lastMessage) : 'No messages yet'}
+                      {conv.type !== 'group' && !isOnline && formatSidebarStatus(other) && (
+                        <span className="text-gray-600"> · {formatSidebarStatus(other)}</span>
+                      )}
+                    </p>
+                  </div>
                 </div>
               </motion.button>
             )

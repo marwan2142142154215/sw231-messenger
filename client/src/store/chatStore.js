@@ -151,5 +151,11 @@ export const useChatStore = create((set, get) => ({
     }
   },
 
-  clearSearchResults: () => {}
+  clearSearchResults: () => {},
+
+  lastSeenMap: {},
+
+  updateLastSeen: (userId, lastSeen) => {
+    set({ lastSeenMap: { ...get().lastSeenMap, [userId]: lastSeen } })
+  }
 }))

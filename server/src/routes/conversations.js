@@ -24,7 +24,7 @@ router.get('/', authGuard, async (req, res) => {
     (allMembers || []).forEach(m => userIdSet.add(m.user_id));
     
     const { data: allUsers } = await sb.from('users')
-      .select('id, username, display_name, avatar_url, status').in('id', [...userIdSet]);
+      .select('id, username, display_name, avatar_url, status, last_seen').in('id', [...userIdSet]);
     
     const userMap = {};
     (allUsers || []).forEach(u => { userMap[u.id] = u; });
