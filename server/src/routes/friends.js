@@ -41,10 +41,11 @@ router.post('/scan', authGuard, async (req, res) => {
     
     if (existingFriend) return res.json({ message: 'Already friends', userId: qr.user_id, status: existingFriend.status });
     
-    await sb.from('friends').insert([
+    const { error: friendErr } = await sb.from('friends').insert([
       { user_id: req.user.id, friend_id: qr.user_id, status: 'accepted' },
       { user_id: qr.user_id, friend_id: req.user.id, status: 'accepted' }
     ]);
+    if (friendErr) { console.error('[FRIENDS] Friends insert error:', friendErr.message); return res.status(500).json({ error: 'Failed to add friend' }); }
     
     const { data: convConv } = await sb.from('conversations').select('id').eq('type', 'private').in('id',
       (await sb.from('conversation_members').select('conversation_id').eq('user_id', req.user.id)).data?.map(c => c.conversation_id) || []
@@ -58,13 +59,14 @@ router.post('/scan', authGuard, async (req, res) => {
     
     if (!convId) {
       convId = uuidv4();
-      await Promise.all([
-        sb.from('conversations').insert([{ id: convId, type: 'private', created_by: req.user.id }]),
-        sb.from('conversation_members').insert([
-          { conversation_id: convId, user_id: req.user.id, role: 'member' },
-          { conversation_id: convId, user_id: qr.user_id, role: 'member' }
-        ])
+      const { error: convErr } = await sb.from('conversations').insert([{ id: convId, type: 'private', created_by: req.user.id }]);
+      if (convErr) { console.error('[FRIENDS] Conv insert error:', convErr.message); return res.status(500).json({ error: 'Failed to create conversation' }); }
+      
+      const { error: memErr } = await sb.from('conversation_members').insert([
+        { conversation_id: convId, user_id: req.user.id, role: 'member' },
+        { conversation_id: convId, user_id: qr.user_id, role: 'member' }
       ]);
+      if (memErr) { console.error('[FRIENDS] Members insert error:', memErr.message); return res.status(500).json({ error: 'Failed to add members' }); }
     }
     
     const { data: friendUser } = await sb.from('users').select('id, username, display_name, avatar_url, status').eq('id', qr.user_id).single();

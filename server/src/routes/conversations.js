@@ -93,14 +93,16 @@ router.post('/private', authGuard, async (req, res) => {
     }
     
     const convId = uuidv4();
-    await Promise.all([
-      sb.from('conversations').insert([{ id: convId, type: 'private', created_by: req.user.id }]),
-      sb.from('conversation_members').insert([
-        { conversation_id: convId, user_id: req.user.id, role: 'member' },
-        { conversation_id: convId, user_id: userId, role: 'member' }
-      ])
-    ]);
+    const { error: convErr } = await sb.from('conversations').insert([{ id: convId, type: 'private', created_by: req.user.id }]);
+    if (convErr) { console.error('[CONV] Insert conversation error:', convErr.message); return res.status(500).json({ error: 'Failed to create conversation: ' + convErr.message }); }
     
+    const { error: memberErr } = await sb.from('conversation_members').insert([
+      { conversation_id: convId, user_id: req.user.id, role: 'member' },
+      { conversation_id: convId, user_id: userId, role: 'member' }
+    ]);
+    if (memberErr) { console.error('[CONV] Insert members error:', memberErr.message); return res.status(500).json({ error: 'Failed to add members: ' + memberErr.message }); }
+    
+    console.log(`[CONV] Created private conv ${convId} between ${req.user.username} and ${userId}`);
     res.status(201).json({ conversationId: convId });
   } catch (err) {
     console.error('[CONV] Create private error:', err);
@@ -119,11 +121,13 @@ router.post('/group', authGuard, async (req, res) => {
     const members = [{ conversation_id: convId, user_id: req.user.id, role: 'admin' }];
     memberIds.forEach(id => { if (id !== req.user.id) members.push({ conversation_id: convId, user_id: id, role: 'member' }); });
     
-    await Promise.all([
-      sb.from('conversations').insert([{ id: convId, type: 'group', name: sanitize(name), created_by: req.user.id }]),
-      sb.from('conversation_members').insert(members)
-    ]);
+    const { error: convErr } = await sb.from('conversations').insert([{ id: convId, type: 'group', name: sanitize(name), created_by: req.user.id }]);
+    if (convErr) return res.status(500).json({ error: 'Failed to create group: ' + convErr.message });
     
+    const { error: memberErr } = await sb.from('conversation_members').insert(members);
+    if (memberErr) return res.status(500).json({ error: 'Failed to add members: ' + memberErr.message });
+    
+    console.log(`[CONV] Created group conv ${convId} "${name}" by ${req.user.username}`);
     res.status(201).json({ conversationId: convId });
   } catch (err) {
     res.status(500).json({ error: 'Failed to create group' });
