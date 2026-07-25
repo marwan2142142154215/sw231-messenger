@@ -57,17 +57,36 @@ router.post('/login', authLimiter, async (req, res) => {
     const sb = getSupabase();
     if (!sb) return res.status(500).json({ error: 'Database not initialized' });
     
-    const { data: user, error: loginErr } = await sb.from('users')
-      .select('id, username, email, password_hash, display_name, avatar_url, role, is_approved')
-      .or(`username.eq.${username},email.eq.${username}`).single();
+    let user = null;
+    let loginErr = null;
     
-    if (loginErr) {
+    const { data: byUsername, error: e1 } = await sb.from('users')
+      .select('id, username, email, password_hash, display_name, avatar_url, role, is_approved')
+      .eq('username', username).single();
+    
+    if (byUsername) {
+      user = byUsername;
+    } else {
+      const { data: byEmail, error: e2 } = await sb.from('users')
+        .select('id, username, email, password_hash, display_name, avatar_url, role, is_approved')
+        .eq('email', username).single();
+      user = byEmail;
+      loginErr = e2;
+    }
+    
+    if (loginErr && !user) {
       console.error('[AUTH] Login query error:', loginErr.message, loginErr.code);
-      return res.status(500).json({ error: 'Database error: ' + loginErr.message });
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     
-    const valid = await verifyPassword(password, user.password_hash);
+    let valid;
+    try {
+      valid = await verifyPassword(password, user.password_hash);
+    } catch (pwErr) {
+      console.error('[AUTH] Password verify error:', pwErr.message);
+      return res.status(500).json({ error: 'Password verification failed' });
+    }
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
     if (!user.is_approved) return res.status(403).json({ error: 'Account pending admin approval. Please wait.' });
     
