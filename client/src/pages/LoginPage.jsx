@@ -74,7 +74,7 @@ function GlowOrb() {
 }
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('')
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [shake, setShake] = useState(false)
@@ -96,7 +96,7 @@ export default function LoginPage() {
     e.preventDefault()
     setLoading(true)
     try {
-      await login(email, password)
+      await login(username, password)
       toast.success('Welcome back!')
       navigate('/chat')
     } catch (err) {
@@ -142,10 +142,10 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
               <input
-                type="email"
-                placeholder="Email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
+                type="text"
+                placeholder="Username"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
                 className="input-field"
                 required
               />

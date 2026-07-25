@@ -19,7 +19,7 @@ function validateUsername(u) {
 }
 
 function validatePassword(p) {
-  return typeof p === 'string' && p.length >= 8 && p.length <= 128;
+  return typeof p === 'string' && p.length >= 6 && p.length <= 128;
 }
 
 function validateEmail(e) {

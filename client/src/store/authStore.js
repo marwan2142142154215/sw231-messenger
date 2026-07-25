@@ -19,11 +19,11 @@ export const useAuthStore = create((set, get) => ({
     }
   },
 
-  login: async (email, password) => {
+  login: async (username, password) => {
     set({ error: null })
     try {
-      const { data } = await api.post('/auth/login', { email, password })
-      localStorage.setItem('nyx_access_token', data.accessToken)
+      const { data } = await api.post('/auth/login', { username, password })
+      localStorage.setItem('nyx_access_token', data.token)
       set({ user: data.user })
       updateSocketToken()
       return data.user
@@ -39,7 +39,7 @@ export const useAuthStore = create((set, get) => ({
     try {
       const { data } = await api.post('/auth/register', { username, email, password })
       if (data.pending) return { pending: true }
-      localStorage.setItem('nyx_access_token', data.accessToken)
+      localStorage.setItem('nyx_access_token', data.token)
       set({ user: data.user })
       updateSocketToken()
       return data.user

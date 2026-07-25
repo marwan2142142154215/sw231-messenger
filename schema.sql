@@ -9,7 +9,7 @@
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
   username TEXT UNIQUE NOT NULL,
-  email TEXT UNIQUE,
+  email TEXT,
   password_hash TEXT NOT NULL,
   display_name TEXT NOT NULL,
   avatar_url TEXT DEFAULT '',

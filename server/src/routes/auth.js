@@ -45,7 +45,7 @@ router.post('/register', authLimiter, async (req, res) => {
     const device = parseDevice(req.get('User-Agent'));
 
     await sb.from('users').insert([{
-      id: userId, username, email: email || '', password_hash: passwordHash,
+      id: userId, username, email: email || null, password_hash: passwordHash,
       display_name: sanitize(displayName || username), is_approved: 0,
       ip_address: ip, device_info: device, last_ip: ip, last_device: device
     }]);

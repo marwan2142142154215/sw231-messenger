@@ -125,7 +125,7 @@ export default function RegisterPage() {
               <input type="text" placeholder="Username" value={username} onChange={e => setUsername(e.target.value)} className="input-field" required minLength={3} />
             </motion.div>
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
-              <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} className="input-field" required />
+              <input type="email" placeholder="Email (optional)" value={email} onChange={e => setEmail(e.target.value)} className="input-field" />
             </motion.div>
             <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.5 }}>
               <input type="password" placeholder="Password (min 6 chars)" value={password} onChange={e => setPassword(e.target.value)} className="input-field" required minLength={6} />

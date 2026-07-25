@@ -128,7 +128,7 @@ router.post('/users', adminGuard, async (req, res) => {
     const hash = await hashPassword(password);
     
     await sb.from('users').insert([{
-      id: userId, username, email: email || '', password_hash: hash,
+      id: userId, username, email: email || null, password_hash: hash,
       display_name: displayName || username, is_approved: 1, role: 'user'
     }]);
     
