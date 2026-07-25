@@ -90,9 +90,13 @@ async function startServer() {
   app.get('/api/debug', async (req, res) => {
     try {
       const sb = getSupabase();
-      const { data, error } = await sb.from('admins').select('id, username').limit(5);
-      const tables = await sb.rpc ? null : null;
-      res.json({ admins: data || [], error: error?.message || null, keyType: config.supabase.serviceKey ? 'service' : 'anon' });
+      const tables = ['users','admins','sessions','admin_sessions','conversations','conversation_members','messages','read_receipts','reactions','friends','qr_tokens','message_requests','posts','post_likes','post_comments','stories','story_views','listings','follows','blocked_users','admin_logs','feature_flags','firewall_logs','encryption_keys'];
+      const results = {};
+      for (const t of tables) {
+        const { error } = await sb.from(t).select('*').limit(1);
+        results[t] = error ? error.message : 'OK';
+      }
+      res.json({ tables: results, env: { supabaseUrl: !!config.supabase.url, anonKey: !!config.supabase.anonKey, serviceKey: !!config.supabase.serviceKey, jwt: !!config.jwt.secret } });
     } catch (e) {
       res.json({ error: e.message });
     }

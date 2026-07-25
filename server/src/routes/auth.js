@@ -55,11 +55,18 @@ router.post('/login', authLimiter, async (req, res) => {
     if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
     
     const sb = getSupabase();
+    if (!sb) return res.status(500).json({ error: 'Database not initialized' });
+    
     const { data: user, error: loginErr } = await sb.from('users')
       .select('id, username, email, password_hash, display_name, avatar_url, role, is_approved')
       .or(`username.eq.${username},email.eq.${username}`).single();
     
-    if (loginErr || !user) return res.status(401).json({ error: 'Invalid credentials' });
+    if (loginErr) {
+      console.error('[AUTH] Login query error:', loginErr.message, loginErr.code);
+      return res.status(500).json({ error: 'Database error: ' + loginErr.message });
+    }
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
+    
     const valid = await verifyPassword(password, user.password_hash);
     if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
     if (!user.is_approved) return res.status(403).json({ error: 'Account pending admin approval. Please wait.' });
@@ -67,13 +74,14 @@ router.post('/login', authLimiter, async (req, res) => {
     const { token, refreshToken } = generateTokens(user.id);
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     
-    await sb.from('sessions').insert([{
+    const { error: sessErr } = await sb.from('sessions').insert([{
       id: uuidv4(), user_id: user.id, token, refresh_token: refreshToken, expires_at: expiresAt
-    }]).catch(e => console.error('[AUTH] Session insert warning:', e.message));
+    }]);
+    if (sessErr) console.warn('[AUTH] Session insert warning:', sessErr.message);
     
     await sb.from('users').update({
       status: 'online', last_seen: new Date().toISOString()
-    }).eq('id', user.id).catch(() => {});
+    }).eq('id', user.id).catch(e => console.warn('[AUTH] Status update warning:', e.message));
     
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true, secure: config.nodeEnv === 'production',
@@ -86,8 +94,8 @@ router.post('/login', authLimiter, async (req, res) => {
       user: { id: user.id, username: user.username, displayName: user.display_name, avatarUrl: user.avatar_url, role: user.role }
     });
   } catch (err) {
-    console.error('[AUTH] Login error:', err);
-    res.status(500).json({ error: 'Login failed' });
+    console.error('[AUTH] Login error:', err.stack || err.message || err);
+    res.status(500).json({ error: 'Login failed: ' + (err.message || 'Unknown error') });
   }
 });
 
