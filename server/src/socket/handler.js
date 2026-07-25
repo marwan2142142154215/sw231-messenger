@@ -115,14 +115,20 @@ function initSocket(io) {
           created_at: now, reactions: []
         };
 
-        io.to('conv:' + conversationId).emit('message:new', message);
-
-        sb.from('messages').insert([{
+        const { error: insertError } = await sb.from('messages').insert([{
           id: msgId, conversation_id: conversationId, sender_id: socket.user.id,
           content: encryptedContent, type: finalType, reply_to: replyTo || null, created_at: now,
           media_url: mediaUrl || null, media_type: mediaType || null, mime_type: mimeType || null,
           file_name: fileName || null, file_size: fileSize || null, duration: duration || null
-        }]).catch(() => {});
+        }]);
+
+        if (insertError) {
+          console.error('[SOCKET] Message insert failed:', insertError.message);
+          socket.emit('message:error', { error: 'Failed to save message' });
+          return;
+        }
+
+        io.to('conv:' + conversationId).emit('message:new', message);
 
         sb.from('conversation_members').select('user_id').eq('conversation_id', conversationId).neq('user_id', socket.user.id)
           .then(({ data: members }) => {

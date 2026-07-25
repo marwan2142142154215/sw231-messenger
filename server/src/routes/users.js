@@ -37,10 +37,10 @@ router.get('/search', authGuard, async (req, res) => {
 router.get('/:id', authGuard, async (req, res) => {
   try {
     const sb = getSupabase();
-    const { data: user } = await sb.from('users')
-      .select('id, username, display_name, avatar_url, cover_url, bio, status, last_seen, created_at')
+    const { data: user, error } = await sb.from('users')
+      .select('id, username, display_name, avatar_url, status, last_seen, created_at')
       .eq('id', req.params.id).single();
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (error || !user) return res.status(404).json({ error: 'User not found' });
     
     const { count: followers } = await sb.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', req.params.id);
     const { count: following } = await sb.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', req.params.id);

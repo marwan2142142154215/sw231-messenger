@@ -11,10 +11,10 @@ async function authGuard(req, res, next) {
   try {
     const decoded = jwt.verify(token, config.jwt.secret);
     const sb = getSupabase();
-    const { data: user } = await sb.from('users')
-      .select('id, username, display_name, avatar_url, cover_url, bio, role, status, is_approved, public_key')
+    const { data: user, error } = await sb.from('users')
+      .select('id, username, display_name, avatar_url, role, status, is_approved')
       .eq('id', decoded.userId).single();
-    if (!user) return res.status(401).json({ error: 'User not found' });
+    if (error || !user) return res.status(401).json({ error: 'User not found' });
     if (!user.is_approved) return res.status(403).json({ error: 'Account not approved' });
     req.user = user;
     next();
@@ -33,9 +33,9 @@ async function adminGuard(req, res, next) {
   try {
     const decoded = jwt.verify(token, config.jwt.secret + '-admin');
     const sb = getSupabase();
-    const { data: admin } = await sb.from('admins')
+    const { data: admin, error } = await sb.from('admins')
       .select('id, username, display_name, totp_enabled').eq('id', decoded.adminId).single();
-    if (!admin) return res.status(401).json({ error: 'Admin not found' });
+    if (error || !admin) return res.status(401).json({ error: 'Admin not found' });
     req.admin = admin;
     next();
   } catch {

@@ -149,10 +149,10 @@ router.post('/logout', authGuard, async (req, res) => {
 router.get('/me', authGuard, async (req, res) => {
   try {
     const sb = getSupabase();
-    const { data: user } = await sb.from('users')
-      .select('id, username, display_name, avatar_url, cover_url, bio, role, status, created_at')
+    const { data: user, error } = await sb.from('users')
+      .select('id, username, display_name, avatar_url, role, status, created_at')
       .eq('id', req.user.id).single();
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (error || !user) return res.status(404).json({ error: 'User not found' });
     res.json({
       user: { id: user.id, username: user.username, displayName: user.display_name, avatarUrl: user.avatar_url,
         coverUrl: user.cover_url, bio: user.bio, role: user.role, status: user.status, createdAt: user.created_at }
