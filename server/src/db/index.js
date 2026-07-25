@@ -6,7 +6,8 @@ let supabase = null;
 function getSupabase() {
   if (!supabase) {
     supabase = createClient(config.supabase.url, config.supabase.serviceKey || config.supabase.anonKey, {
-      auth: { persistSession: false }
+      auth: { persistSession: false },
+      realtime: { params: { eventsPerSecondLimit: 0 } }
     });
   }
   return supabase;
