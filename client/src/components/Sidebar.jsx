@@ -17,15 +17,20 @@ export default function Sidebar() {
   const [showQR, setShowQR] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [filter, setFilter] = useState('')
+  const lastConvIdRef = useRef(null)
 
   useEffect(() => {
-    if (conversationId && conversations.length) {
+    if (conversationId && conversationId !== lastConvIdRef.current && conversations.length) {
       const conv = conversations.find(c => c.id === conversationId)
-      if (conv) setActiveConversation(conv)
+      if (conv && activeConversation?.id !== conversationId) {
+        lastConvIdRef.current = conversationId
+        setActiveConversation(conv)
+      }
     }
-  }, [conversationId, conversations, setActiveConversation])
+  }, [conversationId])
 
   const handleSelect = (conv) => {
+    lastConvIdRef.current = conv.id
     setActiveConversation(conv)
     navigate(`/chat/${conv.id}`)
   }
