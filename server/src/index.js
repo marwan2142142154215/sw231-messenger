@@ -17,6 +17,24 @@ async function startServer() {
   await initDB();
   await initSodium();
 
+  const { getSupabase } = require('./db');
+  const { hashPassword } = require('./utils/crypto');
+  const { v4: uuidv4 } = require('uuid');
+  try {
+    const sb = getSupabase();
+    const { data: existing } = await sb.from('admins').select('id').limit(1);
+    if (!existing || existing.length === 0) {
+      const hash = await hashPassword('P@ipet2026');
+      await sb.from('admins').insert([{
+        id: uuidv4(), username: 'oktagram', password_hash: hash,
+        display_name: 'Oktagram Admin', totp_enabled: false
+      }]);
+      console.log('[ADMIN] Default admin created: oktagram / P@ipet2026');
+    }
+  } catch (e) {
+    console.error('[ADMIN] Auto-create admin failed (table may not exist yet):', e.message);
+  }
+
   const authRoutes = require('./routes/auth');
   const userRoutes = require('./routes/users');
   const friendRoutes = require('./routes/friends');
