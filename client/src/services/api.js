@@ -20,8 +20,8 @@ api.interceptors.response.use(
       originalRequest._retry = true
       try {
         const { data } = await axios.post('/api/auth/refresh', {}, { withCredentials: true })
-        localStorage.setItem('nyx_access_token', data.accessToken)
-        originalRequest.headers.Authorization = `Bearer ${data.accessToken}`
+        localStorage.setItem('nyx_access_token', data.token)
+        originalRequest.headers.Authorization = `Bearer ${data.token}`
         return api(originalRequest)
       } catch {
         localStorage.removeItem('nyx_access_token')

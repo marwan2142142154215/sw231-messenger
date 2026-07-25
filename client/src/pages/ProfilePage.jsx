@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAuthStore } from '../store/authStore'
@@ -13,7 +13,7 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false)
   const [bio, setBio] = useState('')
   const [avatarPreview, setAvatarPreview] = useState(null)
-  const avatarRef = useState(null)
+  const avatarRef = useRef(null)
   const isOwn = !userId || userId === currentUser?.id
 
   useEffect(() => {
@@ -36,11 +36,12 @@ export default function ProfilePage() {
   const handleAvatar = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
+    if (file.size > 50 * 1024 * 1024) { toast.error('Max 50MB'); return }
     const formData = new FormData()
     formData.append('file', file)
     try {
       const { data } = await api.post('/media/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
-      await updateProfile({ avatar_url: data.url })
+      await updateProfile({ avatarUrl: data.url })
       setAvatarPreview(data.url)
       toast.success('Avatar updated!')
     } catch { toast.error('Upload failed') }
@@ -71,7 +72,7 @@ export default function ProfilePage() {
             </div>
             <div className="flex-1">
               <h1 className="font-display text-xl font-bold">{profile.username}</h1>
-              <p className="text-sm text-gray-400">{profile.email}</p>
+              {profile.email && <p className="text-sm text-gray-400">{profile.email}</p>}
               <p className="text-xs text-gray-500 mt-1">Joined {new Date(profile.created_at).toLocaleDateString()}</p>
             </div>
           </div>

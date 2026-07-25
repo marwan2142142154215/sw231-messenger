@@ -9,10 +9,27 @@ export function getSocket() {
       auth: { token },
       transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: 10,
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000
+      reconnectionDelayMax: 30000,
+      timeout: 20000,
+      forceNew: false,
+      multiplex: true
+    })
+
+    socket.on('connect', () => {
+      console.log('[SOCKET] Connected:', socket.id)
+    })
+
+    socket.on('disconnect', (reason) => {
+      console.log('[SOCKET] Disconnected:', reason)
+      if (reason === 'io server disconnect') {
+        socket.connect()
+      }
+    })
+
+    socket.on('connect_error', (err) => {
+      console.log('[SOCKET] Connection error:', err.message)
     })
   }
   return socket
@@ -20,6 +37,7 @@ export function getSocket() {
 
 export function disconnectSocket() {
   if (socket) {
+    socket.removeAllListeners()
     socket.disconnect()
     socket = null
   }
@@ -29,6 +47,8 @@ export function updateSocketToken() {
   if (socket) {
     const token = localStorage.getItem('nyx_access_token')
     socket.auth.token = token
-    socket.connect()
+    if (!socket.connected) {
+      socket.connect()
+    }
   }
 }
