@@ -98,9 +98,10 @@ router.post('/login', authLimiter, async (req, res) => {
     }]);
     if (sessErr) console.warn('[AUTH] Session insert warning:', sessErr.message);
     
-    await sb.from('users').update({
+    const { error: statusErr } = await sb.from('users').update({
       status: 'online', last_seen: new Date().toISOString()
-    }).eq('id', user.id).catch(e => console.warn('[AUTH] Status update warning:', e.message));
+    }).eq('id', user.id);
+    if (statusErr) console.warn('[AUTH] Status update warning:', statusErr.message);
     
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true, secure: config.nodeEnv === 'production',
@@ -140,13 +141,13 @@ router.post('/refresh', async (req, res) => {
     const tokens = generateTokens(decoded.userId);
     
     if (session) {
-      await sb.from('sessions').update({ token: tokens.token, refresh_token: tokens.refreshToken })
-        .eq('id', session.id).catch(() => {});
-    } else {
-      await sb.from('sessions').insert([{
-        id: uuidv4(), user_id: decoded.userId, token: tokens.token, refresh_token: tokens.refreshToken,
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-      }]).catch(() => {});
+        await sb.from('sessions').update({ token: tokens.token, refresh_token: tokens.refreshToken })
+          .eq('id', session.id);
+      } else {
+        await sb.from('sessions').insert([{
+          id: uuidv4(), user_id: decoded.userId, token: tokens.token, refresh_token: tokens.refreshToken,
+          expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+        }]);
     }
     
     res.cookie('refreshToken', tokens.refreshToken, {
@@ -164,8 +165,8 @@ router.post('/logout', authGuard, async (req, res) => {
   try {
     const token = req.headers.authorization?.split(' ')[1] || '';
     const sb = getSupabase();
-    await sb.from('sessions').delete().eq('token', token).catch(() => {});
-    await sb.from('users').update({ status: 'offline', last_seen: new Date().toISOString() }).eq('id', req.user.id).catch(() => {});
+    await sb.from('sessions').delete().eq('token', token);
+    await sb.from('users').update({ status: 'offline', last_seen: new Date().toISOString() }).eq('id', req.user.id);
     res.clearCookie('refreshToken');
     res.json({ message: 'Logged out' });
   } catch (err) {
