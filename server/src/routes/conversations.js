@@ -38,7 +38,7 @@ router.get('/', authGuard, async (req, res) => {
     const { data: lastMsgs } = await sb.from('messages')
       .select('conversation_id, content, created_at, sender_id, is_deleted, type, media_url')
       .in('conversation_id', convIds).eq('is_deleted', 0)
-      .order('created_at', { ascending: false }).limit(convIds.length);
+      .order('created_at', { ascending: false });
     
     const lastMsgMap = {};
     (lastMsgs || []).forEach(m => {

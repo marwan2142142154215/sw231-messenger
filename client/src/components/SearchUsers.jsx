@@ -68,7 +68,7 @@ export default function SearchUsers({ onClose, onSelect }) {
               </div>
               <div className="flex-1">
                 <p className="font-medium text-sm">{user.username}</p>
-                <p className="text-xs text-gray-500">{user.email}</p>
+                <p className="text-xs text-gray-500">{user.display_name || user.username}</p>
               </div>
               <button onClick={() => handleStartChat(user.id)} className="btn-primary text-xs px-3 py-1.5">
                 Chat

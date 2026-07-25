@@ -35,6 +35,15 @@ export function getSocket() {
   return socket
 }
 
+export function socketEmit(event, data) {
+  const s = getSocket()
+  if (s?.connected) {
+    s.emit(event, data)
+  } else {
+    console.warn('[SOCKET] Not connected, cannot emit:', event)
+  }
+}
+
 export function disconnectSocket() {
   if (socket) {
     socket.removeAllListeners()

@@ -12,8 +12,17 @@ router.get('/feed', authGuard, async (req, res) => {
     const sb = getSupabase();
     
     const { data: posts } = await sb.from('posts')
-      .select('*, users!posts_user_id_fkey(id, username, display_name, avatar_url)')
+      .select('*')
       .eq('visibility', 'public').order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+    
+    const postIds = (posts || []).map(p => p.id);
+    const postUserIds = [...new Set((posts || []).map(p => p.user_id).filter(Boolean))];
+    
+    let postUserMap = {};
+    if (postUserIds.length > 0) {
+      const { data: postUsers } = await sb.from('users').select('id, username, display_name, avatar_url').in('id', postUserIds);
+      (postUsers || []).forEach(u => { postUserMap[u.id] = u; });
+    }
     
     const postIds = (posts || []).map(p => p.id);
     const [likesData, commentsData] = await Promise.all([
@@ -34,7 +43,7 @@ router.get('/feed', authGuard, async (req, res) => {
     });
     
     const result = (posts || []).map(p => ({
-      ...p, user: p.users,
+      ...p, user: postUserMap[p.user_id] || null,
       hasLiked: (likesMap[p.id] || []).includes(req.user.id),
       likesCount: (likesMap[p.id] || []).length,
       commentsCount: commentsMap[p.id] || p.comments_count
@@ -107,9 +116,17 @@ router.get('/post/:postId/comments', authGuard, async (req, res) => {
   try {
     const sb = getSupabase();
     const { data: comments } = await sb.from('post_comments')
-      .select('*, users!post_comments_user_id_fkey(username, display_name, avatar_url)')
+      .select('*')
       .eq('post_id', req.params.postId).order('created_at');
-    res.json({ comments: (comments || []).map(c => ({ ...c, user: c.users })) });
+    
+    const commentUserIds = [...new Set((comments || []).map(c => c.user_id).filter(Boolean))];
+    let commentUserMap = {};
+    if (commentUserIds.length > 0) {
+      const { data: cu } = await sb.from('users').select('id, username, display_name, avatar_url').in('id', commentUserIds);
+      (cu || []).forEach(u => { commentUserMap[u.id] = u; });
+    }
+    
+    res.json({ comments: (comments || []).map(c => ({ ...c, user: commentUserMap[c.user_id] || null })) });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch comments' });
   }
@@ -133,13 +150,20 @@ router.get('/stories', authGuard, async (req, res) => {
   try {
     const sb = getSupabase();
     const { data: stories } = await sb.from('stories')
-      .select('*, users!stories_user_id_fkey(id, username, display_name, avatar_url)')
+      .select('*')
       .gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false });
+    
+    const storyUserIds = [...new Set((stories || []).map(s => s.user_id).filter(Boolean))];
+    let storyUserMap = {};
+    if (storyUserIds.length > 0) {
+      const { data: su } = await sb.from('users').select('id, username, display_name, avatar_url').in('id', storyUserIds);
+      (su || []).forEach(u => { storyUserMap[u.id] = u; });
+    }
     
     const storyMap = {};
     (stories || []).forEach(s => {
       const uid = s.user_id;
-      if (!storyMap[uid]) storyMap[uid] = { user: s.users, stories: [] };
+      if (!storyMap[uid]) storyMap[uid] = { user: storyUserMap[uid] || null, stories: [] };
       storyMap[uid].stories.push(s);
     });
     

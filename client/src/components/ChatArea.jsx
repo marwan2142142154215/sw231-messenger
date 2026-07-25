@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { useChatStore } from '../store/chatStore'
 import { useAuthStore } from '../store/authStore'
-import { useSocket } from '../hooks/useSocket'
+import { socketEmit } from '../services/socket'
 import MessageBubble from './MessageBubble'
 
 export default function ChatArea() {
@@ -14,7 +14,6 @@ export default function ChatArea() {
   const [editingMsg, setEditingMsg] = useState(null)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
-  const { emit } = useSocket()
   const sendMessage = useChatStore(s => s.sendMessage)
   const user = useAuthStore(s => s.user)
   const typingTimeout = useRef(null)
@@ -25,26 +24,26 @@ export default function ChatArea() {
 
   useEffect(() => {
     if (activeConversation) {
-      emit('conversation:join', activeConversation.id)
+      socketEmit('conversation:join', activeConversation.id)
     }
-  }, [activeConversation, emit])
+  }, [activeConversation])
 
   const handleTyping = () => {
     if (!activeConversation) return
-    emit('typing:start', activeConversation.id)
+    socketEmit('typing:start', activeConversation.id)
     clearTimeout(typingTimeout.current)
     typingTimeout.current = setTimeout(() => {
-      emit('typing:stop', activeConversation.id)
+      socketEmit('typing:stop', activeConversation.id)
     }, 2000)
   }
 
   const handleSend = async () => {
     if (!input.trim() || !activeConversation) return
     if (editingMsg) {
-      emit('message:edit', { messageId: editingMsg.id, content: input, conversationId: activeConversation.id })
+      socketEmit('message:edit', { messageId: editingMsg.id, content: input, conversationId: activeConversation.id })
       setEditingMsg(null)
     } else {
-      sendMessage(activeConversation.id, input, replyTo, user, emit)
+      sendMessage(activeConversation.id, input, replyTo, user, socketEmit)
       setReplyTo(null)
     }
     setInput('')

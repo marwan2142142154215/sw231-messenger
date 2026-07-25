@@ -12,13 +12,21 @@ router.get('/listings', authGuard, async (req, res) => {
     const { category, status } = req.query;
     const sb = getSupabase();
     
-    let query = sb.from('listings').select('*, users!listings_user_id_fkey(id, username, display_name, avatar_url)').order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+    let query = sb.from('listings').select('*').order('created_at', { ascending: false }).range(offset, offset + limit - 1);
     if (category) query = query.eq('category', category);
     if (status) query = query.eq('status', status);
     else query = query.eq('status', 'available');
     
     const { data: listings } = await query;
-    res.json({ listings: (listings || []).map(l => ({ ...l, user: l.users })) });
+    
+    const userIds = [...new Set((listings || []).map(l => l.user_id).filter(Boolean))];
+    let userMap = {};
+    if (userIds.length > 0) {
+      const { data: users } = await sb.from('users').select('id, username, display_name, avatar_url').in('id', userIds);
+      (users || []).forEach(u => { userMap[u.id] = u; });
+    }
+    
+    res.json({ listings: (listings || []).map(l => ({ ...l, user: userMap[l.user_id] || null })) });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch listings' });
   }

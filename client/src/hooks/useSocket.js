@@ -1,33 +1,32 @@
-import { useEffect, useRef, useCallback } from 'react'
+import { useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getSocket } from '../services/socket'
 import { useChatStore } from '../store/chatStore'
 import { useAuthStore } from '../store/authStore'
 import { showNotification, requestNotifPermission } from '../utils/notifications'
 
+let socketInitialized = false
+
 export function useSocket() {
   const socketRef = useRef(null)
   const navigate = useNavigate()
   const user = useAuthStore(s => s.user)
-  const addMessage = useChatStore(s => s.addMessage)
-  const updateMessage = useChatStore(s => s.updateMessage)
-  const removeMessage = useChatStore(s => s.removeMessage)
-  const markMessageFailed = useChatStore(s => s.markMessageFailed)
-  const setOnlineUsers = useChatStore(s => s.setOnlineUsers)
-  const setTyping = useChatStore(s => s.setTyping)
-  const activeConversation = useChatStore(s => s.activeConversation)
 
   useEffect(() => {
-    if (!user) return
+    if (!user || socketInitialized) return
+    socketInitialized = true
     requestNotifPermission()
 
     const socket = getSocket()
     socketRef.current = socket
 
-    socket.on('message:new', (message) => {
+    const onMessageNew = (message) => {
+      const { addMessage } = useChatStore.getState()
       addMessage(message)
-      const isFromMe = message.sender_id === user.id
-      const isActiveChat = activeConversation?.id === message.conversation_id
+      const authUser = useAuthStore.getState().user
+      const activeConv = useChatStore.getState().activeConversation
+      const isFromMe = message.sender_id === authUser?.id
+      const isActiveChat = activeConv?.id === message.conversation_id
       if (!isFromMe && !isActiveChat) {
         showNotification(
           message.display_name || message.username || 'New Message',
@@ -35,21 +34,22 @@ export function useSocket() {
           () => navigate(`/chat/${message.conversation_id}`)
         )
       }
-    })
+    }
 
-    socket.on('message:error', ({ error, tempId }) => {
-      if (tempId) markMessageFailed(tempId)
-    })
+    const onMessageError = ({ error, tempId }) => {
+      console.error('[SOCKET] Message error:', error)
+      useChatStore.getState().markMessageFailed(tempId)
+    }
 
-    socket.on('message:edited', ({ messageId, content }) => {
-      updateMessage(messageId, { content, is_edited: 1 })
-    })
+    const onMessageEdited = ({ messageId, content }) => {
+      useChatStore.getState().updateMessage(messageId, { content, is_edited: 1 })
+    }
 
-    socket.on('message:deleted', ({ messageId }) => {
-      removeMessage(messageId)
-    })
+    const onMessageDeleted = ({ messageId }) => {
+      useChatStore.getState().removeMessage(messageId)
+    }
 
-    socket.on('message:reaction', ({ messageId, emoji, action, userId }) => {
+    const onMessageReaction = ({ messageId, emoji, action, userId }) => {
       const messages = useChatStore.getState().messages
       const msg = messages.find(m => m.id === messageId)
       if (!msg) return
@@ -59,36 +59,42 @@ export function useSocket() {
       } else {
         reactions.push({ emoji, userId })
       }
-      updateMessage(messageId, { reactions })
-    })
+      useChatStore.getState().updateMessage(messageId, { reactions })
+    }
 
-    socket.on('user:status', ({ userId, status }) => {})
+    const onTypingStart = ({ userId, conversationId }) => {
+      useChatStore.getState().setTyping(conversationId, userId, true)
+    }
 
-    socket.on('typing:start', ({ userId, conversationId }) => {
-      setTyping(conversationId, userId, true)
-    })
+    const onTypingStop = ({ userId, conversationId }) => {
+      useChatStore.getState().setTyping(conversationId, userId, false)
+    }
 
-    socket.on('typing:stop', ({ userId, conversationId }) => {
-      setTyping(conversationId, userId, false)
-    })
+    const onConnected = () => {
+      console.log('[SOCKET] Authenticated, joining conversations...')
+    }
+
+    socket.on('message:new', onMessageNew)
+    socket.on('message:error', onMessageError)
+    socket.on('message:edited', onMessageEdited)
+    socket.on('message:deleted', onMessageDeleted)
+    socket.on('message:reaction', onMessageReaction)
+    socket.on('typing:start', onTypingStart)
+    socket.on('typing:stop', onTypingStop)
+    socket.on('connected', onConnected)
 
     return () => {
-      socket.off('message:new')
-      socket.off('message:error')
-      socket.off('message:edited')
-      socket.off('message:deleted')
-      socket.off('message:reaction')
-      socket.off('user:status')
-      socket.off('typing:start')
-      socket.off('typing:stop')
+      socketInitialized = false
+      socket.off('message:new', onMessageNew)
+      socket.off('message:error', onMessageError)
+      socket.off('message:edited', onMessageEdited)
+      socket.off('message:deleted', onMessageDeleted)
+      socket.off('message:reaction', onMessageReaction)
+      socket.off('typing:start', onTypingStart)
+      socket.off('typing:stop', onTypingStop)
+      socket.off('connected', onConnected)
     }
-  }, [user, addMessage, updateMessage, removeMessage, markMessageFailed, setOnlineUsers, setTyping, activeConversation, navigate])
+  }, [user, navigate])
 
-  const emit = useCallback((event, data) => {
-    if (socketRef.current?.connected) {
-      socketRef.current.emit(event, data)
-    }
-  }, [])
-
-  return { socket: socketRef.current, emit }
+  return { socket: socketRef.current }
 }

@@ -100,10 +100,11 @@ function initSocket(io) {
         let replyToData = null;
         if (replyTo) {
           const { data: rMsg } = await sb.from('messages')
-            .select('id, content, sender_id, users!messages_sender_id_fkey(username)').eq('id', replyTo).single();
+            .select('id, content, sender_id').eq('id', replyTo).single();
           if (rMsg) {
             try { rMsg.content = decryptMessage(rMsg.content, key); } catch {}
-            replyToData = { id: rMsg.id, content: rMsg.content, sender_id: rMsg.sender_id, username: rMsg.users?.username };
+            const { data: rUser } = await sb.from('users').select('username').eq('id', rMsg.sender_id).single();
+            replyToData = { id: rMsg.id, content: rMsg.content, sender_id: rMsg.sender_id, username: rUser?.username };
           }
         }
 

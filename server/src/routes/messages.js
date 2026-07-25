@@ -18,36 +18,50 @@ router.get('/:conversationId', authGuard, async (req, res) => {
     const cursor = req.query.cursor;
     
     let query = sb.from('messages')
-      .select('id, conversation_id, sender_id, content, type, reply_to, is_edited, is_deleted, created_at, updated_at, media_url, media_type, mime_type, file_name, file_size, duration, users!messages_sender_id_fkey(display_name, username, avatar_url)')
+      .select('id, conversation_id, sender_id, content, type, reply_to, is_edited, is_deleted, created_at, updated_at, media_url, media_type, mime_type, file_name, file_size, duration')
       .eq('conversation_id', req.params.conversationId).eq('is_deleted', 0)
       .order('created_at', { ascending: false }).limit(limit);
     
     if (cursor) query = query.lt('created_at', cursor);
-    const { data: messages } = await query;
+    const { data: messages, error: msgErr } = await query;
+    if (msgErr) console.error('[MSG-API] Query error:', msgErr.message);
     
     const key = generateConversationKey(req.params.conversationId);
     const msgIds = (messages || []).map(m => m.id);
     
+    const senderIds = [...new Set((messages || []).map(m => m.sender_id).filter(Boolean))];
+    const replyMsgIds = [...new Set((messages || []).map(m => m.reply_to).filter(Boolean))];
+    const allUserIds = [...new Set([...senderIds, ...replyMsgIds])];
+    
+    let userMap = {};
+    if (allUserIds.length > 0) {
+      const { data: users } = await sb.from('users')
+        .select('id, username, display_name, avatar_url').in('id', allUserIds);
+      (users || []).forEach(u => { userMap[u.id] = u; });
+    }
+    
     const [reactionsResult, replyResult] = await Promise.all([
-      msgIds.length > 0 ? sb.from('reactions').select('message_id, emoji, user_id, users!reactions_user_id_fkey(username)').in('message_id', msgIds) : { data: [] },
-      msgIds.length > 0 ? sb.from('messages').select('id, content, sender_id, users!messages_sender_id_fkey(username)').in('id', (messages || []).filter(m => m.reply_to).map(m => m.reply_to)) : { data: [] }
+      msgIds.length > 0 ? sb.from('reactions').select('message_id, emoji, user_id').in('message_id', msgIds) : { data: [] },
+      replyMsgIds.length > 0 ? sb.from('messages').select('id, content, sender_id').in('id', replyMsgIds) : { data: [] }
     ]);
     
     const reactionsMap = {};
     (reactionsResult.data || []).forEach(r => {
       if (!reactionsMap[r.message_id]) reactionsMap[r.message_id] = [];
-      reactionsMap[r.message_id].push({ emoji: r.emoji, userId: r.user_id, username: r.users?.username });
+      const rUser = userMap[r.user_id] || {};
+      reactionsMap[r.message_id].push({ emoji: r.emoji, userId: r.user_id, username: rUser.username });
     });
     
     const replyToMap = {};
     (replyResult.data || []).forEach(r => {
       let rc = r.content;
       try { rc = decryptMessage(r.content, key); } catch {}
-      replyToMap[r.id] = { id: r.id, content: rc, sender_id: r.sender_id, username: r.users?.username };
+      const rUser = userMap[r.sender_id] || {};
+      replyToMap[r.id] = { id: r.id, content: rc, sender_id: r.sender_id, username: rUser.username };
     });
     
     const parsed = (messages || []).reverse().map(msg => {
-      const sender = msg.users || {};
+      const sender = userMap[msg.sender_id] || {};
       let content = msg.content;
       try { content = decryptMessage(msg.content, key); } catch {}
       return {

@@ -75,7 +75,7 @@ export const useChatStore = create((set, get) => ({
   },
 
   addMessage: (message) => {
-    const { messages, conversations } = get()
+    const { messages, conversations, activeConversation } = get()
     const exists = messages.find(m => m.id === message.id)
     if (exists) {
       if (exists._sending) {
@@ -83,14 +83,16 @@ export const useChatStore = create((set, get) => ({
       }
       return
     }
-    set({
-      messages: [...messages, message],
-      conversations: conversations.map(c =>
-        c.id === message.conversation_id
-          ? { ...c, lastMessage: message.content, lastMessageTime: message.created_at }
-          : c
-      )
-    })
+    const updatedConversations = conversations.map(c =>
+      c.id === message.conversation_id
+        ? { ...c, lastMessage: message.content, lastMessageTime: message.created_at }
+        : c
+    )
+    if (activeConversation && message.conversation_id === activeConversation.id) {
+      set({ messages: [...messages, message], conversations: updatedConversations })
+    } else {
+      set({ conversations: updatedConversations })
+    }
   },
 
   markMessageFailed: (tempId) => {

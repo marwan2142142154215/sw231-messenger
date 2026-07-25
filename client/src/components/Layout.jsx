@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore'
 import { useChatStore } from '../store/chatStore'
 import { useThemeStore } from '../store/themeStore'
 import { useSocket } from '../hooks/useSocket'
+import { socketEmit } from '../services/socket'
 import ThemeSettings from './ThemeSettings'
 import { useEffect, useState } from 'react'
 
@@ -30,7 +31,7 @@ export default function Layout() {
   const loadConversations = useChatStore(s => s.loadConversations)
   const loadFriends = useChatStore(s => s.loadFriends)
   const navigate = useNavigate()
-  const { emit } = useSocket()
+  useSocket()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [showTheme, setShowTheme] = useState(false)
   const theme = useThemeStore(s => s.theme)
@@ -41,8 +42,8 @@ export default function Layout() {
   }, [loadConversations, loadFriends])
 
   useEffect(() => {
-    if (user) emit('set_status', { status: 'online' })
-  }, [user, emit])
+    if (user) socketEmit('set_status', { status: 'online' })
+  }, [user])
 
   const handleLogout = async () => {
     await logout()

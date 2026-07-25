@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 import { format } from 'date-fns'
 import { useState } from 'react'
-import { useSocket } from '../hooks/useSocket'
+import { socketEmit } from '../services/socket'
 import { useChatStore } from '../store/chatStore'
 
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '😡']
@@ -9,21 +9,20 @@ const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '😡']
 export default function MessageBubble({ message, isOwn, onReply, onEdit }) {
   const [showReactions, setShowReactions] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
-  const { emit } = useSocket()
   const retryMessage = useChatStore(s => s.retryMessage)
 
   const handleReact = (emoji) => {
-    emit('message:react', { messageId: message.id, emoji, conversationId: message.conversation_id })
+    socketEmit('message:react', { messageId: message.id, emoji, conversationId: message.conversation_id })
     setShowReactions(false)
   }
 
   const handleDelete = () => {
-    emit('message:delete', { messageId: message.id, conversationId: message.conversation_id, forEveryone: true })
+    socketEmit('message:delete', { messageId: message.id, conversationId: message.conversation_id, forEveryone: true })
     setShowMenu(false)
   }
 
   const handleRetry = () => {
-    retryMessage(message.id, message.conversation_id, message.content, message.replyTo, { id: message.sender_id, username: message.username, display_name: message.display_name, avatar_url: message.avatar_url }, emit)
+    retryMessage(message.id, message.conversation_id, message.content, message.replyTo, { id: message.sender_id, username: message.username, display_name: message.display_name, avatar_url: message.avatar_url }, socketEmit)
   }
 
   const groupedReactions = (message.reactions || []).reduce((acc, r) => {
