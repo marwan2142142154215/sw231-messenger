@@ -11,14 +11,21 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit }) {
   const { emit } = useSocket()
 
   const handleReact = (emoji) => {
-    emit('react_message', { messageId: message.id, emoji })
+    emit('message:react', { messageId: message.id, emoji, conversationId: message.conversation_id })
     setShowReactions(false)
   }
 
   const handleDelete = () => {
-    emit('delete_message', { messageId: message.id })
+    emit('message:delete', { messageId: message.id, conversationId: message.conversation_id, forEveryone: true })
     setShowMenu(false)
   }
+
+  const groupedReactions = (message.reactions || []).reduce((acc, r) => {
+    const existing = acc.find(a => a.emoji === r.emoji)
+    if (existing) { existing.count++; existing.userIds.push(r.userId) }
+    else acc.push({ emoji: r.emoji, count: 1, userIds: [r.userId] })
+    return acc
+  }, [])
 
   return (
     <motion.div
@@ -27,25 +34,25 @@ export default function MessageBubble({ message, isOwn, onReply, onEdit }) {
       className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
     >
       <div className={`relative group max-w-md ${isOwn ? 'order-1' : 'order-1'}`}>
-        {message.reply_to && (
+        {message.replyTo && (
           <div className="text-xs text-gray-500 mb-1 px-2 py-1 glass rounded-t-lg border-b-0">
-            Replying to: {message.reply_to.content?.substring(0, 50)}
+            Replying to: {message.replyTo.content?.substring(0, 50)}
           </div>
         )}
         <div
           className={isOwn ? 'chat-bubble-right' : 'chat-bubble-left'}
           onDoubleClick={() => setShowReactions(!showReactions)}
         >
-          {message.is_edited && <span className="text-xs text-gray-500 italic">edited </span>}
+          {message.is_edited === 1 && <span className="text-xs text-gray-500 italic">edited </span>}
           <p className="text-sm leading-relaxed break-words">{message.content}</p>
           <p className={`text-[10px] mt-1 ${isOwn ? 'text-white/50' : 'text-gray-500'}`}>
             {format(new Date(message.created_at), 'HH:mm')}
           </p>
         </div>
 
-        {message.reactions && message.reactions.length > 0 && (
+        {groupedReactions.length > 0 && (
           <div className="flex gap-1 mt-1 flex-wrap">
-            {message.reactions.map((r, i) => (
+            {groupedReactions.map((r, i) => (
               <button
                 key={i}
                 onClick={() => handleReact(r.emoji)}

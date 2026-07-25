@@ -22,7 +22,7 @@ export default function QRModal({ onClose }) {
         async (decodedText) => {
           scanner.clear().catch(() => {})
           try {
-            await api.post('/friends/qr-scan', { token: decodedText })
+            await api.post('/friends/scan', { qrToken: decodedText })
             toast.success('Friend added!')
             onClose()
           } catch (err) {

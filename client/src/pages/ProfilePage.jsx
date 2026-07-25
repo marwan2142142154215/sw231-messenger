@@ -10,6 +10,7 @@ export default function ProfilePage() {
   const currentUser = useAuthStore(s => s.user)
   const updateProfile = useAuthStore(s => s.updateProfile)
   const [profile, setProfile] = useState(null)
+  const [stats, setStats] = useState({ followers: 0, following: 0, posts: 0 })
   const [editing, setEditing] = useState(false)
   const [bio, setBio] = useState('')
   const [avatarPreview, setAvatarPreview] = useState(null)
@@ -21,7 +22,10 @@ export default function ProfilePage() {
       setProfile(currentUser)
       setBio(currentUser?.bio || '')
     } else {
-      api.get(`/users/${userId}`).then(({ data }) => setProfile(data.user)).catch(() => toast.error('User not found'))
+      api.get(`/users/${userId}`).then(({ data }) => {
+        setProfile(data.user)
+        setStats(data.stats || { followers: 0, following: 0, posts: 0 })
+      }).catch(() => toast.error('User not found'))
     }
   }, [userId, currentUser, isOwn])
 
@@ -58,7 +62,7 @@ export default function ProfilePage() {
               <div className="w-20 h-20 rounded-full bg-gradient-to-br from-nyx-500 to-neon-cyan flex items-center justify-center text-2xl font-bold overflow-hidden">
                 {avatarPreview || profile.avatar_url ? (
                   <img src={avatarPreview || profile.avatar_url} alt="" className="w-full h-full object-cover" />
-                ) : profile.username?.charAt(0).toUpperCase()
+                ) : (profile.username?.charAt(0).toUpperCase() || '?')
                 }
               </div>
               {isOwn && (
@@ -95,15 +99,15 @@ export default function ProfilePage() {
 
           <div className="flex gap-6 pt-4 border-t border-white/5">
             <div className="text-center">
-              <p className="font-bold text-lg">{profile.posts_count || 0}</p>
+              <p className="font-bold text-lg">{stats.posts}</p>
               <p className="text-xs text-gray-500">Posts</p>
             </div>
             <div className="text-center">
-              <p className="font-bold text-lg">{profile.followers_count || 0}</p>
+              <p className="font-bold text-lg">{stats.followers}</p>
               <p className="text-xs text-gray-500">Followers</p>
             </div>
             <div className="text-center">
-              <p className="font-bold text-lg">{profile.following_count || 0}</p>
+              <p className="font-bold text-lg">{stats.following}</p>
               <p className="text-xs text-gray-500">Following</p>
             </div>
           </div>

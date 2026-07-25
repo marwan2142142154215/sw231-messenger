@@ -8,7 +8,6 @@ export const useChatStore = create((set, get) => ({
   onlineUsers: new Set(),
   typingUsers: {},
   friends: [],
-  searchResults: [],
 
   loadConversations: async () => {
     try {
@@ -27,10 +26,8 @@ export const useChatStore = create((set, get) => ({
   searchUsers: async (query) => {
     try {
       const { data } = await api.get(`/users/search?q=${encodeURIComponent(query)}`)
-      set({ searchResults: data.users || [] })
       return data.users || []
     } catch {
-      set({ searchResults: [] })
       return []
     }
   },
@@ -54,7 +51,7 @@ export const useChatStore = create((set, get) => ({
     set({
       conversations: conversations.map(c =>
         c.id === message.conversation_id
-          ? { ...c, last_message: message.content, updated_at: message.created_at }
+          ? { ...c, lastMessage: message.content, lastMessageTime: message.created_at }
           : c
       )
     })
@@ -78,25 +75,19 @@ export const useChatStore = create((set, get) => ({
     set({ typingUsers: { ...typingUsers, [conversationId]: convTyping } })
   },
 
-  createConversation: async (participantId, type = 'private') => {
+  createConversation: async (participantId) => {
     try {
-      const { data } = await api.post('/conversations', { participantId, type })
+      const { data } = await api.post('/conversations/private', { userId: participantId })
+      const conversationId = data.conversationId
       const { conversations } = get()
-      if (!conversations.find(c => c.id === data.conversation.id)) {
-        set({ conversations: [data.conversation, ...conversations] })
+      if (!conversations.find(c => c.id === conversationId)) {
+        await get().loadConversations()
       }
-      return data.conversation
+      return conversationId
     } catch (err) {
       throw new Error(err.response?.data?.error || 'Failed to create conversation')
     }
   },
 
-  addReaction: async (messageId, emoji) => {
-    try {
-      const { data } = await api.post(`/messages/${messageId}/react`, { emoji })
-      return data
-    } catch {}
-  },
-
-  clearSearchResults: () => set({ searchResults: [] })
+  clearSearchResults: () => {}
 }))

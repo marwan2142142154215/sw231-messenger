@@ -23,56 +23,60 @@ export function useSocket() {
     const socket = getSocket()
     socketRef.current = socket
 
-    socket.on('connect', () => {
-      console.log('[SOCKET] Connected')
-    })
-
-    socket.on('new_message', (message) => {
+    socket.on('message:new', (message) => {
       addMessage(message)
-
       const isFromMe = message.sender_id === user.id
       const isActiveChat = activeConversation?.id === message.conversation_id
-
       if (!isFromMe && !isActiveChat) {
         showNotification(
-          message.sender_name || 'New Message',
+          message.display_name || message.username || 'New Message',
           message.content?.substring(0, 100) || '📎 Attachment',
           () => navigate(`/chat/${message.conversation_id}`)
         )
       }
     })
 
-    socket.on('message_edited', (message) => {
-      updateMessage(message.id, message)
+    socket.on('message:edited', ({ messageId, content }) => {
+      updateMessage(messageId, { content, is_edited: 1 })
     })
 
-    socket.on('message_deleted', ({ messageId }) => {
+    socket.on('message:deleted', ({ messageId }) => {
       removeMessage(messageId)
     })
 
-    socket.on('message_reaction', ({ messageId, reactions }) => {
+    socket.on('message:reaction', ({ messageId, emoji, action, userId }) => {
+      const messages = useChatStore.getState().messages
+      const msg = messages.find(m => m.id === messageId)
+      if (!msg) return
+      let reactions = [...(msg.reactions || [])]
+      if (action === 'removed') {
+        reactions = reactions.filter(r => !(r.emoji === emoji && r.userId === userId))
+      } else {
+        reactions.push({ emoji, userId })
+      }
       updateMessage(messageId, { reactions })
     })
 
-    socket.on('online_users', (users) => {
-      setOnlineUsers(users)
+    socket.on('user:status', ({ userId, status }) => {
+      // handled by online users list if needed
     })
 
-    socket.on('user_typing', ({ conversationId, userId, isTyping }) => {
-      setTyping(conversationId, userId, isTyping)
+    socket.on('typing:start', ({ userId, conversationId }) => {
+      setTyping(conversationId, userId, true)
     })
 
-    socket.on('disconnect', (reason) => {
-      console.log('[SOCKET] Disconnected:', reason)
+    socket.on('typing:stop', ({ userId, conversationId }) => {
+      setTyping(conversationId, userId, false)
     })
 
     return () => {
-      socket.off('new_message')
-      socket.off('message_edited')
-      socket.off('message_deleted')
-      socket.off('message_reaction')
-      socket.off('online_users')
-      socket.off('user_typing')
+      socket.off('message:new')
+      socket.off('message:edited')
+      socket.off('message:deleted')
+      socket.off('message:reaction')
+      socket.off('user:status')
+      socket.off('typing:start')
+      socket.off('typing:stop')
     }
   }, [user, addMessage, updateMessage, removeMessage, setOnlineUsers, setTyping, activeConversation, navigate])
 

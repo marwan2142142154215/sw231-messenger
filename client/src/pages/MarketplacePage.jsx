@@ -76,8 +76,8 @@ export default function MarketplacePage() {
                 </div>
                 {listing.description && <p className="text-sm text-gray-400">{listing.description}</p>}
                 <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                  <p className="text-xs text-gray-500">By {listing.seller_name || 'Unknown'}</p>
-                  {listing.seller_id === user?.id && (
+                  <p className="text-xs text-gray-500">By {listing.user?.username || 'Unknown'}</p>
+                  {listing.user_id === user?.id && (
                     <button onClick={() => deleteListing(listing.id)} className="text-xs text-neon-pink hover:text-neon-pink/80">Delete</button>
                   )}
                 </div>

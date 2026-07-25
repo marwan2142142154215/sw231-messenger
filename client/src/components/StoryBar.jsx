@@ -25,7 +25,7 @@ export default function StoryBar({ stories, onAdd, onView }) {
           className="shrink-0 w-16 h-16 rounded-full p-0.5 bg-gradient-to-br from-nyx-500 via-neon-cyan to-neon-pink"
         >
           <div className="w-full h-full rounded-full bg-nyx-950 flex items-center justify-center border-2 border-nyx-950">
-            <span className="text-sm font-bold">{story.author_name?.charAt(0).toUpperCase() || '?'}</span>
+            <span className="text-sm font-bold">{(story.user?.username || '?').charAt(0).toUpperCase()}</span>
           </div>
         </motion.button>
       ))}

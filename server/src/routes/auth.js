@@ -135,8 +135,9 @@ router.post('/refresh', async (req, res) => {
 
 router.post('/logout', authGuard, async (req, res) => {
   try {
+    const token = req.headers.authorization?.split(' ')[1] || '';
     const sb = getSupabase();
-    await sb.from('sessions').delete().eq('token', req.token || '');
+    await sb.from('sessions').delete().eq('token', token);
     await sb.from('users').update({ status: 'offline', last_seen: new Date().toISOString() }).eq('id', req.user.id);
     res.clearCookie('refreshToken');
     res.json({ message: 'Logged out' });

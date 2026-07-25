@@ -60,8 +60,8 @@ export const useAuthStore = create((set, get) => ({
   updateProfile: async (updates) => {
     try {
       const { data } = await api.put('/users/profile', updates)
-      set({ user: { ...get().user, ...data.user } })
-      return data.user
+      set({ user: { ...get().user, ...data } })
+      return data
     } catch (err) {
       throw new Error(err.response?.data?.error || 'Update failed')
     }

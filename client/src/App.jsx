@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { useAuthStore } from './store/authStore'
@@ -29,7 +30,7 @@ function ProtectedRoute({ children }) {
 export default function App() {
   const init = useAuthStore(s => s.init)
 
-  React.useEffect(() => {
+  useEffect(() => {
     init()
   }, [init])
 

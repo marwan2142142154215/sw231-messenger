@@ -31,8 +31,14 @@ export default function Sidebar() {
     navigate(`/chat/${conv.id}`)
   }
 
+  const getOtherMember = (conv) => {
+    if (!conv.members) return null
+    return conv.members.find(m => m.id !== user?.id) || conv.members[0]
+  }
+
   const filtered = conversations.filter(c => {
-    const name = c.name || c.participant_name || ''
+    const other = getOtherMember(c)
+    const name = c.type === 'group' ? c.name : (other?.display_name || other?.username || '')
     return name.toLowerCase().includes(filter.toLowerCase())
   })
 
@@ -64,8 +70,9 @@ export default function Sidebar() {
       <div className="flex-1 overflow-y-auto">
         <AnimatePresence>
           {filtered.map((conv, i) => {
-            const otherName = conv.type === 'group' ? conv.name : (conv.participant_name || 'Unknown')
-            const isOnline = onlineUsers.has(conv.participant_id)
+            const other = getOtherMember(conv)
+            const otherName = conv.type === 'group' ? conv.name : (other?.display_name || other?.username || 'Unknown')
+            const isOnline = other?.id ? onlineUsers.has(other.id) : false
             return (
               <motion.button
                 key={conv.id}
@@ -87,7 +94,7 @@ export default function Sidebar() {
                 </div>
                 <div className="flex-1 text-left min-w-0">
                   <p className="font-medium text-sm truncate">{otherName}</p>
-                  <p className="text-xs text-gray-500 truncate">{conv.last_message || 'No messages yet'}</p>
+                  <p className="text-xs text-gray-500 truncate">{conv.lastMessage || 'No messages yet'}</p>
                 </div>
               </motion.button>
             )

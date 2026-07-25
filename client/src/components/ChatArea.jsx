@@ -24,29 +24,29 @@ export default function ChatArea() {
 
   useEffect(() => {
     if (activeConversation) {
-      emit('join_conversation', { conversationId: activeConversation.id })
+      emit('conversation:join', activeConversation.id)
     }
   }, [activeConversation, emit])
 
   const handleTyping = () => {
     if (!activeConversation) return
-    emit('typing_start', { conversationId: activeConversation.id })
+    emit('typing:start', activeConversation.id)
     clearTimeout(typingTimeout.current)
     typingTimeout.current = setTimeout(() => {
-      emit('typing_stop', { conversationId: activeConversation.id })
+      emit('typing:stop', activeConversation.id)
     }, 2000)
   }
 
   const handleSend = async () => {
     if (!input.trim() || !activeConversation) return
     if (editingMsg) {
-      emit('edit_message', { messageId: editingMsg.id, content: input })
+      emit('message:edit', { messageId: editingMsg.id, content: input, conversationId: activeConversation.id })
       setEditingMsg(null)
     } else {
-      emit('send_message', {
+      emit('message:send', {
         conversationId: activeConversation.id,
         content: input,
-        replyToId: replyTo?.id || null
+        replyTo: replyTo?.id || null
       })
       setReplyTo(null)
     }
@@ -65,17 +65,18 @@ export default function ChatArea() {
     }
   }
 
+  const getOtherMember = () => {
+    if (!activeConversation?.members) return null
+    return activeConversation.members.find(m => m.id !== user?.id) || activeConversation.members[0]
+  }
+
   const typingInConv = typingUsers[activeConversation?.id] || new Set()
   const typingNames = [...typingInConv].filter(id => id !== user?.id)
 
   if (!activeConversation) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
-        <motion.div
-          initial={{ scale: 0.8, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="space-y-4"
-        >
+        <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="space-y-4">
           <div className="w-20 h-20 rounded-full bg-nyx-600/20 flex items-center justify-center mx-auto animate-float">
             <svg className="w-10 h-10 text-nyx-400" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
@@ -88,14 +89,17 @@ export default function ChatArea() {
     )
   }
 
+  const otherMember = getOtherMember()
+  const displayName = activeConversation.type === 'group' ? activeConversation.name : (otherMember?.display_name || otherMember?.username || 'Chat')
+
   return (
     <div className="flex-1 flex flex-col h-full">
       <div className="px-6 py-3 glass border-b border-white/10 flex items-center gap-3">
         <div className="w-9 h-9 rounded-full bg-gradient-to-br from-nyx-500 to-neon-purple flex items-center justify-center text-sm font-bold">
-          {(activeConversation.participant_name || activeConversation.name || '?').charAt(0).toUpperCase()}
+          {displayName.charAt(0).toUpperCase()}
         </div>
         <div>
-          <p className="font-medium text-sm">{activeConversation.participant_name || activeConversation.name}</p>
+          <p className="font-medium text-sm">{displayName}</p>
           {typingNames.length > 0 && (
             <p className="text-xs text-neon-cyan animate-pulse">typing...</p>
           )}
@@ -121,7 +125,7 @@ export default function ChatArea() {
             <svg className="w-4 h-4 text-nyx-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" />
             </svg>
-            <span>{editingMsg ? 'Editing message' : `Replying to ${replyTo.sender_name}`}</span>
+            <span>{editingMsg ? 'Editing message' : `Replying to ${replyTo.display_name || replyTo.username}`}</span>
           </div>
           <button onClick={() => { setReplyTo(null); setEditingMsg(null) }} className="text-gray-500 hover:text-white">✕</button>
         </div>

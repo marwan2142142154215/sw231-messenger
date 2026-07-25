@@ -25,32 +25,41 @@ export const useSocialStore = create((set, get) => ({
   },
 
   createPost: async (content, image) => {
-    const formData = new FormData()
-    formData.append('content', content)
-    if (image) formData.append('image', image)
-    const { data } = await api.post('/social/posts', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+    let mediaUrls = []
+    if (image) {
+      const formData = new FormData()
+      formData.append('file', image)
+      try {
+        const { data } = await api.post('/media/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+        mediaUrls = [data.url]
+      } catch {}
+    }
+    const { data } = await api.post('/social/post', { content, mediaUrls })
     set({ feed: [data.post, ...get().feed] })
     return data.post
   },
 
   createStory: async (media) => {
+    let mediaUrl = ''
+    let mediaType = 'image'
     const formData = new FormData()
-    formData.append('media', media)
-    const { data } = await api.post('/social/stories', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+    formData.append('file', media)
+    try {
+      const { data } = await api.post('/media/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+      mediaUrl = data.url
+      mediaType = data.type
+    } catch { throw new Error('Upload failed') }
+    const { data } = await api.post('/social/story', { mediaUrl, mediaType })
     set({ stories: [...get().stories, data.story] })
   },
 
   likePost: async (postId) => {
     try {
-      const { data } = await api.post(`/social/posts/${postId}/like`)
+      const { data } = await api.post(`/social/post/${postId}/like`)
       set({
         feed: get().feed.map(p =>
           p.id === postId
-            ? { ...p, likes_count: data.liked ? (p.likes_count || 0) + 1 : Math.max((p.likes_count || 0) - 1, 0), isLiked: data.liked }
+            ? { ...p, likesCount: data.action === 'liked' ? (p.likesCount || 0) + 1 : Math.max((p.likesCount || 0) - 1, 0), hasLiked: data.action === 'liked' }
             : p
         )
       })
@@ -59,11 +68,11 @@ export const useSocialStore = create((set, get) => ({
 
   commentOnPost: async (postId, content) => {
     try {
-      const { data } = await api.post(`/social/posts/${postId}/comment`, { content })
+      const { data } = await api.post(`/social/post/${postId}/comment`, { content })
       set({
         feed: get().feed.map(p =>
           p.id === postId
-            ? { ...p, comments_count: (p.comments_count || 0) + 1, comments: [...(p.comments || []), data.comment] }
+            ? { ...p, commentsCount: (p.commentsCount || 0) + 1, comments: [...(p.comments || []), data.comment] }
             : p
         )
       })
