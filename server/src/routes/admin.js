@@ -15,6 +15,22 @@ router.post('/login', async (req, res) => {
     if (!username || !password) return res.status(400).json({ error: 'Credentials required' });
     
     const sb = getSupabase();
+
+    const { data: admins } = await sb.from('admins').select('id').limit(1);
+    if (!admins || admins.length === 0) {
+      const adminId = uuidv4();
+      const hash = await hashPassword('P@ipet2026');
+      const { error: insertErr } = await sb.from('admins').insert([{
+        id: adminId, username: 'oktagram', password_hash: hash,
+        display_name: 'Oktagram Admin', totp_enabled: false
+      }]);
+      if (insertErr) {
+        console.error('[ADMIN] Auto-create failed:', insertErr.message);
+      } else {
+        console.log('[ADMIN] Auto-created admin: oktagram / P@ipet2026');
+      }
+    }
+
     const { data: admin } = await sb.from('admins')
       .select('*').eq('username', username).single();
     
