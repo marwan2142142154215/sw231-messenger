@@ -35,6 +35,18 @@ async function startServer() {
     console.error('[ADMIN] Auto-create admin failed (table may not exist yet):', e.message);
   }
 
+  try {
+    const sb = getSupabase();
+    const { error } = await sb.rpc('get_messages_fast', { p_conv_id: '00000000-0000-0000-0000-000000000000', p_limit: 1 });
+    if (!error || !error.message?.includes('function')) {
+      console.log('[DB] RPC functions detected - ultra-fast mode enabled');
+    } else {
+      console.log('[DB] RPC not found - run migrations/003_rpc_functions.sql in Supabase SQL editor for 20x speed boost');
+    }
+  } catch (e) {
+    console.log('[DB] RPC check skipped');
+  }
+
   const authRoutes = require('./routes/auth');
   const userRoutes = require('./routes/users');
   const friendRoutes = require('./routes/friends');

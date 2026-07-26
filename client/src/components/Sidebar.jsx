@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useChatStore } from '../store/chatStore'
 import { useAuthStore } from '../store/authStore'
@@ -10,6 +10,7 @@ export default function Sidebar() {
   const conversations = useChatStore(s => s.conversations)
   const activeConversation = useChatStore(s => s.activeConversation)
   const setActiveConversation = useChatStore(s => s.setActiveConversation)
+  const preFetchMessages = useChatStore(s => s.preFetchMessages)
   const onlineUsers = useChatStore(s => s.onlineUsers)
   const lastSeenMap = useChatStore(s => s.lastSeenMap)
   const user = useAuthStore(s => s.user)
@@ -19,6 +20,7 @@ export default function Sidebar() {
   const [showSearch, setShowSearch] = useState(false)
   const [filter, setFilter] = useState('')
   const lastConvIdRef = useRef(null)
+  const prefetchRef = useRef(null)
 
   useEffect(() => {
     if (conversationId && conversationId !== lastConvIdRef.current && conversations.length) {
@@ -35,6 +37,13 @@ export default function Sidebar() {
     setActiveConversation(conv)
     navigate(`/chat/${conv.id}`)
   }
+
+  const handleHover = useCallback((convId) => {
+    clearTimeout(prefetchRef.current)
+    prefetchRef.current = setTimeout(() => { preFetchMessages(convId) }, 200)
+  }, [preFetchMessages])
+
+  const handleHoverEnd = useCallback(() => { clearTimeout(prefetchRef.current) }, [])
 
   const getOtherMember = (conv) => {
     if (!conv?.members) return null
@@ -108,6 +117,8 @@ export default function Sidebar() {
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: i * 0.03 }}
                 onClick={() => handleSelect(conv)}
+                onMouseEnter={() => handleHover(conv.id)}
+                onMouseLeave={handleHoverEnd}
                 className={`w-full flex items-center gap-3 px-4 py-3 transition-all hover:bg-white/5 ${
                   activeConversation?.id === conv.id ? 'bg-nyx-600/20 border-r-2 border-nyx-500' : ''
                 }`}

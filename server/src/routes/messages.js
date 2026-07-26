@@ -14,6 +14,22 @@ router.get('/:conversationId', authGuard, async (req, res) => {
 
     const limit = Math.min(parseInt(req.query.limit) || 50, 100);
     const cursor = req.query.cursor;
+    const key = generateConversationKey(convId);
+
+    try {
+      const { data: rpcData, error: rpcErr } = await sb.rpc('get_messages_fast', {
+        p_conv_id: convId, p_limit: limit, p_cursor: cursor || null
+      });
+      if (!rpcErr && rpcData && rpcData.length > 0) {
+        const parsed = rpcData.reverse().map(msg => {
+          let content = msg.content;
+          try { content = decryptMessage(msg.content, key); } catch {}
+          const replyTo = msg.replyTo ? { ...msg.replyTo, content: (() => { try { return decryptMessage(msg.replyTo.content, key).substring(0, 100); } catch { return msg.replyTo.content?.substring(0, 100); } })() } : null;
+          return { ...msg, content, replyTo, reactions: msg.reactions || [], readBy: msg.readBy || [] };
+        });
+        return res.json({ messages: parsed, hasMore: rpcData.length === limit, nextCursor: parsed.length > 0 ? parsed[0].created_at : null });
+      }
+    } catch {}
 
     const [memberResult, messagesResult] = await Promise.all([
       sb.from('conversation_members').select('conversation_id').eq('conversation_id', convId).eq('user_id', req.user.id).single(),
@@ -30,7 +46,6 @@ router.get('/:conversationId', authGuard, async (req, res) => {
     if (!memberResult.data) return res.status(403).json({ error: 'Not a member' });
 
     const messages = messagesResult.data || [];
-    const key = generateConversationKey(convId);
     const msgIds = messages.map(m => m.id);
     const senderIds = [...new Set(messages.map(m => m.sender_id).filter(Boolean))];
     const replyMsgIds = [...new Set(messages.map(m => m.reply_to).filter(Boolean))];

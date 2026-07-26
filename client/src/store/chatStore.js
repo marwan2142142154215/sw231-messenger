@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import api from '../services/api'
 import { v4 as uuidv4 } from 'uuid'
 import toast from 'react-hot-toast'
+import { getCachedConversations, setCachedConversations, getCachedMessages, setCachedMessages, updateCachedMessages } from '../services/cache'
 
 export const useChatStore = create((set, get) => ({
   conversations: [],
@@ -10,14 +11,18 @@ export const useChatStore = create((set, get) => ({
   onlineUsers: new Set(),
   typingUsers: {},
   friends: [],
+  _loadingMessages: false,
 
   loadConversations: async () => {
+    const cached = getCachedConversations()
+    if (cached) { set({ conversations: cached }) }
     try {
       const { data } = await api.get('/conversations')
-      console.log('[CHAT] Loaded conversations:', (data.conversations || []).length)
-      set({ conversations: data.conversations || [] })
+      const convs = data.conversations || []
+      set({ conversations: convs })
+      setCachedConversations(convs)
     } catch (err) {
-      console.error('[CHAT] Failed to load conversations:', err.response?.data || err.message)
+      if (!cached) console.error('[CHAT] Failed to load conversations:', err.response?.data || err.message)
     }
   },
 
@@ -38,16 +43,30 @@ export const useChatStore = create((set, get) => ({
   },
 
   setActiveConversation: async (conversation) => {
-    set({ activeConversation: conversation, messages: [] })
+    const cached = conversation ? getCachedMessages(conversation.id) : null
+    set({ activeConversation: conversation, messages: cached || [], _loadingMessages: !!conversation })
     if (conversation) {
       try {
         const { data } = await api.get(`/messages/${conversation.id}`)
-        set({ messages: data.messages || [] })
+        const msgs = data.messages || []
+        set({ messages: msgs, _loadingMessages: false })
+        setCachedMessages(conversation.id, msgs)
       } catch (err) {
-        console.error('[CHAT] Failed to load messages:', err.response?.data || err.message)
-        toast.error('Failed to load messages: ' + (err.response?.data?.error || err.message))
+        set({ _loadingMessages: false })
+        if (!cached) {
+          console.error('[CHAT] Failed to load messages:', err.response?.data || err.message)
+          toast.error('Failed to load messages: ' + (err.response?.data?.error || err.message))
+        }
       }
     }
+  },
+
+  preFetchMessages: async (conversationId) => {
+    if (getCachedMessages(conversationId)) return
+    try {
+      const { data } = await api.get(`/messages/${conversationId}`)
+      setCachedMessages(conversationId, data.messages || [])
+    } catch {}
   },
 
   sendMessage: (conversationId, content, replyTo, user, emit) => {
@@ -62,14 +81,15 @@ export const useChatStore = create((set, get) => ({
       _sending: true
     }
     const { messages, conversations } = get()
-    set({
-      messages: [...messages, optimisticMsg],
-      conversations: conversations.map(c =>
-        c.id === conversationId
-          ? { ...c, lastMessage: content, lastMessageTime: now }
-          : c
-      )
-    })
+    const newMessages = [...messages, optimisticMsg]
+    const updatedConversations = conversations.map(c =>
+      c.id === conversationId
+        ? { ...c, lastMessage: content, lastMessageTime: now }
+        : c
+    )
+    set({ messages: newMessages, conversations: updatedConversations })
+    setCachedMessages(conversationId, newMessages)
+    setCachedConversations(updatedConversations)
     emit('message:send', { conversationId, content, replyTo: replyTo?.id || null, tempId })
     return tempId
   },
@@ -79,7 +99,11 @@ export const useChatStore = create((set, get) => ({
     const exists = messages.find(m => m.id === message.id)
     if (exists) {
       if (exists._sending) {
-        set({ messages: messages.map(m => m.id === message.id ? { ...message, _sending: false, _failed: false } : m) })
+        const updated = messages.map(m => m.id === message.id ? { ...message, _sending: false, _failed: false } : m)
+        set({ messages: updated })
+        if (activeConversation && message.conversation_id === activeConversation.id) {
+          setCachedMessages(message.conversation_id, updated)
+        }
       }
       return
     }
@@ -89,10 +113,13 @@ export const useChatStore = create((set, get) => ({
         : c
     )
     if (activeConversation && message.conversation_id === activeConversation.id) {
-      set({ messages: [...messages, message], conversations: updatedConversations })
+      const newMessages = [...messages, message]
+      set({ messages: newMessages, conversations: updatedConversations })
+      setCachedMessages(message.conversation_id, newMessages)
     } else {
       set({ conversations: updatedConversations })
     }
+    setCachedConversations(updatedConversations)
   },
 
   markMessageFailed: (tempId) => {

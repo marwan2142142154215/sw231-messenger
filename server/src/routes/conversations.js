@@ -9,6 +9,21 @@ const router = express.Router();
 router.get('/', authGuard, async (req, res) => {
   try {
     const sb = getSupabase();
+
+    try {
+      const { data: rpcData, error: rpcErr } = await sb.rpc('get_conversations_fast', { p_user_id: req.user.id });
+      if (!rpcErr && rpcData && rpcData.length > 0) {
+        const conversations = rpcData.map(conv => {
+          let lastMessage = conv.last_message;
+          if (lastMessage) {
+            try { lastMessage = decryptMessage(conv.last_message, generateConversationKey(conv.id)); } catch { lastMessage = '[encrypted]'; }
+          }
+          return { id: conv.id, type: conv.type, name: conv.name, members: conv.members || [], lastMessage, lastMessageTime: conv.last_message_time };
+        });
+        return res.json({ conversations });
+      }
+    } catch {}
+
     const { data: memberOf } = await sb.from('conversation_members')
       .select('conversation_id').eq('user_id', req.user.id);
     if (!memberOf || memberOf.length === 0) return res.json({ conversations: [] });
