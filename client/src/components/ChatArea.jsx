@@ -140,7 +140,7 @@ export default function ChatArea() {
     if (!el) return
     el.addEventListener('scroll', handleScroll, { passive: true })
     return () => el.removeEventListener('scroll', handleScroll)
-  }, [handleScroll])
+  }, [handleScroll, activeConversation])
 
   const messagesWithDates = useMemo(() => {
     const result = []
